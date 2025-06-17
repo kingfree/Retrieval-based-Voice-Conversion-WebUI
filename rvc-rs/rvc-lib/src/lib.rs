@@ -10,7 +10,14 @@ mod gui;
 pub use gui::{GUIConfig, GUI};
 
 mod devices;
-pub use devices::{DeviceInfo, update_devices, set_devices, selected_sample_rate};
+pub use devices::{
+    DeviceInfo,
+    update_devices,
+    set_devices,
+    selected_sample_rate,
+    get_device_samplerate,
+    get_device_channels,
+};
 
 /// Blend two overlapping audio buffers using a phase vocoder crossfade.
 ///

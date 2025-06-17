@@ -97,3 +97,62 @@ pub fn set_devices(hostapi: &str, input: &str, output: &str) -> Result<u32, Stri
 pub fn selected_sample_rate() -> Option<u32> {
     SELECTED.lock().unwrap().as_ref().map(|s| s.sample_rate)
 }
+
+/// Query the default sample rate of the currently selected input device.
+pub fn get_device_samplerate() -> Result<u32, String> {
+    let selected = SELECTED
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "devices not set".to_string())?;
+
+    let host_id = cpal::available_hosts()
+        .iter()
+        .find(|id| id.name() == selected.hostapi)
+        .copied()
+        .ok_or_else(|| format!("hostapi '{}' not found", selected.hostapi))?;
+    let host = cpal::host_from_id(host_id).map_err(|e| e.to_string())?;
+
+    let input = host
+        .input_devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| d.name().map(|n| n == selected.input_device).unwrap_or(false))
+        .ok_or_else(|| format!("input device '{}' not found", selected.input_device))?;
+
+    let cfg = input.default_input_config().map_err(|e| e.to_string())?;
+    Ok(cfg.sample_rate().0)
+}
+
+/// Determine the number of channels supported by both selected devices.
+/// Returns the minimum of the two, capped at 2.
+pub fn get_device_channels() -> Result<u16, String> {
+    let selected = SELECTED
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "devices not set".to_string())?;
+
+    let host_id = cpal::available_hosts()
+        .iter()
+        .find(|id| id.name() == selected.hostapi)
+        .copied()
+        .ok_or_else(|| format!("hostapi '{}' not found", selected.hostapi))?;
+    let host = cpal::host_from_id(host_id).map_err(|e| e.to_string())?;
+
+    let input = host
+        .input_devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| d.name().map(|n| n == selected.input_device).unwrap_or(false))
+        .ok_or_else(|| format!("input device '{}' not found", selected.input_device))?;
+    let in_cfg = input.default_input_config().map_err(|e| e.to_string())?;
+
+    let output = host
+        .output_devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| d.name().map(|n| n == selected.output_device).unwrap_or(false))
+        .ok_or_else(|| format!("output device '{}' not found", selected.output_device))?;
+    let out_cfg = output.default_output_config().map_err(|e| e.to_string())?;
+
+    let channels = u16::min(u16::min(in_cfg.channels(), out_cfg.channels()), 2);
+    Ok(channels)
+}
