@@ -11,14 +11,18 @@ pub struct DeviceInfo {
 }
 
 #[derive(Clone, Debug)]
-struct SelectedDevices {
-    hostapi: String,
-    input_device: String,
-    output_device: String,
-    sample_rate: u32,
+pub(crate) struct SelectedDevices {
+    pub(crate) hostapi: String,
+    pub(crate) input_device: String,
+    pub(crate) output_device: String,
+    pub(crate) sample_rate: u32,
 }
 
-static SELECTED: Lazy<Mutex<Option<SelectedDevices>>> = Lazy::new(|| Mutex::new(None));
+pub(crate) static SELECTED: Lazy<Mutex<Option<SelectedDevices>>> = Lazy::new(|| Mutex::new(None));
+
+pub(crate) fn selected_devices() -> Option<SelectedDevices> {
+    SELECTED.lock().unwrap().clone()
+}
 
 /// Enumerate audio devices for the given host API.
 pub fn update_devices(hostapi: Option<&str>) -> Result<DeviceInfo, String> {
