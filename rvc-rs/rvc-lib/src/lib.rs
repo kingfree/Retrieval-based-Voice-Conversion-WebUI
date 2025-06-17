@@ -25,6 +25,8 @@ pub use realtime::{start_vc, VC};
 mod rvc_for_realtime;
 pub use rvc_for_realtime::RVC;
 
+use tch::{Kind, Tensor};
+
 /// Blend two overlapping audio buffers using a phase vocoder crossfade.
 ///
 /// `a` and `b` are the buffers to be blended, typically the previous and
@@ -40,80 +42,38 @@ pub fn phase_vocoder(
     assert_eq!(a.len(), fade_out.len());
     assert_eq!(a.len(), fade_in.len());
 
-    let n = a.len();
+    let n = a.len() as i64;
 
-    // Pre-compute the sqrt window used for analysis and synthesis.
-    let window: Vec<f32> = (0..n)
-        .map(|i| (fade_out[i] * fade_in[i]).sqrt())
-        .collect();
+    let a_t = Tensor::of_slice(a);
+    let b_t = Tensor::of_slice(b);
+    let fade_out_t = Tensor::of_slice(fade_out);
+    let fade_in_t = Tensor::of_slice(fade_in);
 
-    // Setup FFT planner.
-    let mut planner = realfft::RealFftPlanner::<f32>::new();
-    let rfft = planner.plan_fft_forward(n);
+    let window = (&fade_out_t * &fade_in_t).sqrt();
+    let fa = (&a_t * &window).rfft(1, false, true);
+    let fb = (&b_t * &window).rfft(1, false, true);
 
-    // Forward FFT for the two windows.
-    let mut buf_a: Vec<f32> = a
-        .iter()
-        .zip(window.iter())
-        .map(|(&x, &w)| x * w)
-        .collect();
-    let mut buf_b: Vec<f32> = b
-        .iter()
-        .zip(window.iter())
-        .map(|(&x, &w)| x * w)
-        .collect();
-    let mut fa = rfft.make_output_vec();
-    let mut fb = rfft.make_output_vec();
-    rfft.process(&mut buf_a, &mut fa).unwrap();
-    rfft.process(&mut buf_b, &mut fb).unwrap();
-
-    let bins = fa.len(); // n/2 + 1
-    let mut absab = Vec::with_capacity(bins);
-    for i in 0..bins {
-        absab.push(fa[i].norm() + fb[i].norm());
-    }
+    let mut absab = fa.abs() + fb.abs();
     if n % 2 == 0 {
-        for v in &mut absab[1..bins - 1] {
-            *v *= 2.0;
-        }
+        let len = absab.size()[0];
+        absab.i((1..len - 1)).mul_(2.0);
     } else {
-        for v in &mut absab[1..] {
-            *v *= 2.0;
-        }
+        let len = absab.size()[0];
+        absab.i((1..len)).mul_(2.0);
     }
 
-    // Phase calculations.
-    let phia: Vec<f32> = fa.iter().map(|c| c.arg()).collect();
-    let phib: Vec<f32> = fb.iter().map(|c| c.arg()).collect();
+    let phia = fa.angle();
+    let phib = fb.angle();
+    let mut deltaphase = &phib - &phia;
+    deltaphase -= (deltaphase / (2.0 * std::f64::consts::PI) + 0.5).floor() * 2.0 * std::f64::consts::PI;
+    let w = Tensor::arange(absab.size()[0], (Kind::Float, tch::Device::Cpu)) * 2.0 * std::f64::consts::PI + &deltaphase;
 
-    let mut deltaphase = Vec::with_capacity(bins);
-    for (&phi_a, &phi_b) in phia.iter().zip(phib.iter()) {
-        let mut dp = phi_b - phi_a;
-        dp -= 2.0 * std::f32::consts::PI * ((dp / (2.0 * std::f32::consts::PI) + 0.5).floor());
-        deltaphase.push(dp);
-    }
+    let t = Tensor::arange(n, (Kind::Float, tch::Device::Cpu)) / (n as f64);
+    let cos_arg = w.unsqueeze(0) * t.unsqueeze(1) + phia.unsqueeze(0);
+    let sum = (absab.unsqueeze(0) * cos_arg.cos()).sum_dim_intlist(&[1], false, Kind::Float);
 
-    let mut w = Vec::with_capacity(bins);
-    for (i, dp) in deltaphase.iter().enumerate() {
-        w.push(2.0 * std::f32::consts::PI * i as f32 + *dp);
-    }
-
-    // Synthesis
-    let mut result = Vec::with_capacity(n);
-    for i in 0..n {
-        let t = i as f32 / n as f32;
-        let mut sum = 0.0f32;
-        for k in 0..bins {
-            sum += absab[k] * (w[k] * t + phia[k]).cos();
-        }
-        result.push(
-            a[i] * fade_out[i].powi(2)
-                + b[i] * fade_in[i].powi(2)
-                + sum * window[i] / n as f32,
-        );
-    }
-
-    result
+    let result = a_t * fade_out_t.pow(2.0) + b_t * fade_in_t.pow(2.0) + &sum * &window / (n as f64);
+    Vec::<f32>::from(result)
 }
 
 #[cfg(test)]
