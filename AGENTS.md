@@ -3,7 +3,7 @@
 ## Project Vision
 The goal of this repository is to rewrite the original Retrieval-based Voice Conversion WebUI in Rust. The new Rust workspace (`rvc-rs`) contains:
 
-- `rvc-lib`: core functionality as a Rust library
+- `rvc-lib`: core functionality as a Rust library, use `tch`
 - `ui`: a Vue 3 front-end built with Vite, bundled into the Tauri app (`ui/src-tauri`)
 
 The project aims to achieve feature parity with `gui_v1.py` while providing better performance and maintainability through Rust and Tauri.

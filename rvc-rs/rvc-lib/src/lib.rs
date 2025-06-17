@@ -19,7 +19,7 @@ mod realtime;
 pub use realtime::{VC, start_vc};
 
 mod rvc_for_realtime;
-pub use rvc_for_realtime::RVC;
+pub use rvc_for_realtime::{AudioCallback, AudioCallbackConfig, RVC, SimpleRVC, apply_crossfade};
 
 use std::f64::consts::PI;
 use tch::{IndexOp, Kind, Tensor};

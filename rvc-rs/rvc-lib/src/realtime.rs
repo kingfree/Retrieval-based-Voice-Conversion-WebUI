@@ -87,7 +87,7 @@ pub fn start_vc() -> Result<VC, String> {
             &config,
             move |data: &[f32], _| {
                 let mut rvc = rvc_in.lock().unwrap();
-                let mut processed = rvc.infer_simple(data);
+                let mut processed = rvc.infer_simple(data).unwrap_or_else(|_| data.to_vec());
                 let mut last = prev_in.lock().unwrap();
                 if !last.is_empty() {
                     let len = crossfade_frames.min(last.len()).min(processed.len());
