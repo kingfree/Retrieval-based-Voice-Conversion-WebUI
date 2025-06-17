@@ -15,6 +15,29 @@ pub struct VC {
     _rvc: Arc<Mutex<RVC>>,
 }
 
+impl VC {
+    /// Update the pitch shift of the running RVC instance.
+    pub fn change_key(&self, key: f32) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_key(key);
+        }
+    }
+
+    /// Update the formant shift of the running RVC instance.
+    pub fn change_formant(&self, formant: f32) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_formant(formant);
+        }
+    }
+
+    /// Update the index rate of the running RVC instance.
+    pub fn change_index_rate(&self, rate: f32) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_index_rate(rate);
+        }
+    }
+}
+
 /// Start realtime voice conversion using the previously selected devices.
 ///
 /// This currently just copies audio from the input device to the output device.
