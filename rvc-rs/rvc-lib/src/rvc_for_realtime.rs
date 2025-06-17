@@ -156,5 +156,18 @@ mod tests {
         let output = rvc.infer(&input);
         assert_eq!(input, output);
     }
+
+    #[test]
+    fn test_infer_pitch_shift_up() {
+        let mut cfg = GUIConfig::default();
+        cfg.pitch = 12.0; // one octave up
+        let mut rvc = RVC::new(&cfg);
+        let input = vec![0.0, 0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5];
+        let output = rvc.infer(&input);
+
+        // Manually computed linear resample at ratio=2
+        let expected = vec![0.0, 1.0, 0.0, -1.0];
+        assert_eq!(output, expected);
+    }
 }
 
