@@ -8,7 +8,9 @@
                     <input
                         type="file"
                         accept=".pth"
-                        @change="(e) => (pth.value = e.target.files[0]?.name || '')"
+                        @change="
+                            (e) => (pth.value = e.target.files[0]?.name || '')
+                        "
                     />
                 </div>
                 <div>
@@ -16,7 +18,9 @@
                     <input
                         type="file"
                         accept=".index"
-                        @change="(e) => (index.value = e.target.files[0]?.name || '')"
+                        @change="
+                            (e) => (index.value = e.target.files[0]?.name || '')
+                        "
                     />
                 </div>
             </section>
@@ -95,6 +99,7 @@
                         type="range"
                         min="-16"
                         max="16"
+                        step="1"
                         v-model.number="pitch"
                     />
                 </div>

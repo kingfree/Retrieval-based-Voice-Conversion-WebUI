@@ -296,18 +296,49 @@ impl RVC {
     /// Set up resampling kernels for different sample rate conversions.
     ///
     /// This mirrors the Python resample_kernel initialization.
+    /// Generate a windowed sinc kernel for resampling.
+    /// - taps: number of filter taps (kernel size)
+    /// - cutoff: normalized cutoff frequency (0.0..0.5)
+    fn sinc_kernel(taps: usize, cutoff: f32) -> Vec<f32> {
+        let mut kernel = Vec::with_capacity(taps);
+        let m = (taps - 1) as f32 / 2.0;
+        for i in 0..taps {
+            let n = i as f32 - m;
+            // Sinc function
+            let sinc = if n.abs() < 1e-8 {
+                2.0 * cutoff
+            } else {
+                (2.0 * cutoff * std::f32::consts::PI * n).sin() / (std::f32::consts::PI * n)
+            };
+            // Hann window
+            let window =
+                0.5 - 0.5 * ((2.0 * std::f32::consts::PI * i as f32) / (taps as f32 - 1.0)).cos();
+            kernel.push(sinc * window);
+        }
+        // Normalize kernel
+        let sum: f32 = kernel.iter().sum();
+        if sum.abs() > 1e-8 {
+            for v in &mut kernel {
+                *v /= sum;
+            }
+        }
+        kernel
+    }
+
     fn setup_resampling(&mut self) {
-        // Common resampling ratios
-        let ratios = vec![
-            ("16000_to_40000", 16000.0 / 40000.0),
-            ("22050_to_40000", 22050.0 / 40000.0),
-            ("44100_to_40000", 44100.0 / 40000.0),
-            ("48000_to_40000", 48000.0 / 40000.0),
+        // Common resampling ratios (input_sr, output_sr)
+        let configs = vec![
+            ("16000_to_40000", 16000.0, 40000.0),
+            ("22050_to_40000", 22050.0, 40000.0),
+            ("44100_to_40000", 44100.0, 40000.0),
+            ("48000_to_40000", 48000.0, 40000.0),
         ];
 
-        for (name, _ratio) in ratios {
-            // In a real implementation, this would generate proper resampling kernels
-            let kernel = vec![1.0; 64]; // Placeholder kernel
+        let taps = 64;
+        for (name, in_sr, out_sr) in configs {
+            // cutoff = 0.5 * min(in_sr, out_sr) / max(in_sr, out_sr)
+            let cutoff = 0.5 * f32::min(in_sr, out_sr) / f32::max(in_sr, out_sr);
+            let kernel = Self::sinc_kernel(taps, cutoff);
             self.resample_kernels.insert(name.to_string(), kernel);
         }
 
