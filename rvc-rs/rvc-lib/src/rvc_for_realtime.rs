@@ -122,8 +122,12 @@ impl RVC {
             rvc.load_model();
         }
 
-        // Load HuBERT model
-        rvc.load_hubert();
+        // Load HuBERT model only if we need it for inference
+        // In a real implementation, this would be loaded on-demand
+        // For now, we'll load it conditionally based on model availability
+        if rvc.model_loaded {
+            rvc.load_hubert();
+        }
 
         rvc
     }
@@ -179,9 +183,11 @@ impl RVC {
     fn load_hubert(&mut self) {
         // In a real implementation, this would load the HuBERT model
         // from "assets/hubert/hubert_base.pt"
-        println!("Loading HuBERT model...");
-        self.hubert_loaded = true;
-        println!("HuBERT model loaded successfully");
+        if !self.hubert_loaded {
+            println!("Loading HuBERT model...");
+            self.hubert_loaded = true;
+            println!("HuBERT model loaded successfully");
+        }
     }
 
     /// Set up resampling kernels for different sample rate conversions.
@@ -340,8 +346,11 @@ impl RVC {
         let mut dummy_feats = Tensor::randn(&[1, seq_len, feature_dim], (Kind::Float, self.device));
 
         // Duplicate last frame (as done in original implementation)
-        let last_frame = dummy_feats.i((.., -1.., ..));
-        dummy_feats = Tensor::cat(&[dummy_feats, last_frame], 1);
+        // Only if we have at least one frame
+        if seq_len > 0 {
+            let last_frame = dummy_feats.i((.., -1, ..)).unsqueeze(1);
+            dummy_feats = Tensor::cat(&[dummy_feats, last_frame], 1);
+        }
 
         Ok(dummy_feats)
     }
@@ -416,14 +425,29 @@ impl RVC {
             let pitch_slice = pitch_tensor.i(3..-1);
             let pitchf_slice = pitchf_tensor.i(3..-1);
 
-            let start_idx = (cache_len as i64 - pitch_slice.size()[0]).max(0);
-            self.cache_pitch.i((start_idx.., ..)).copy_(&pitch_slice);
-            self.cache_pitchf.i((start_idx.., ..)).copy_(&pitchf_slice);
+            let slice_len = pitch_slice.size()[0];
+            let start_idx = (cache_len as i64 - slice_len).max(0);
+            let end_idx = (start_idx + slice_len).min(cache_len as i64);
+
+            // Only copy if we have valid bounds
+            if start_idx < cache_len as i64 && slice_len > 0 {
+                let copy_len = (end_idx - start_idx).min(slice_len);
+                if copy_len > 0 {
+                    self.cache_pitch
+                        .i(start_idx..end_idx)
+                        .copy_(&pitch_slice.i(..copy_len));
+                    self.cache_pitchf
+                        .i(start_idx..end_idx)
+                        .copy_(&pitchf_slice.i(..copy_len));
+                }
+            }
         }
 
-        // Prepare final pitch tensors
-        let cache_pitch = self.cache_pitch.i((-(p_len as i64).., ..)).unsqueeze(0);
-        let cache_pitchf = self.cache_pitchf.i((-(p_len as i64).., ..)).unsqueeze(0);
+        // Prepare final pitch tensors - ensure we don't exceed cache bounds
+        let final_p_len = (p_len as i64).min(cache_len as i64);
+        let cache_start = (cache_len as i64 - final_p_len).max(0);
+        let cache_pitch = self.cache_pitch.i(cache_start..).unsqueeze(0);
+        let cache_pitchf = self.cache_pitchf.i(cache_start..).unsqueeze(0);
 
         Ok((Some(cache_pitch), Some(cache_pitchf)))
     }
@@ -443,9 +467,12 @@ impl RVC {
         }
 
         // Interpolate features (upsampling by factor of 2)
-        feats = feats.permute(&[0, 2, 1]);
-        feats = Tensor::upsample_linear1d(&feats, [feats.size()[2] * 2], false, None);
-        feats = feats.permute(&[0, 2, 1]);
+        // Skip upsampling if tensor has zero size
+        if feats.size()[1] > 0 {
+            feats = feats.permute(&[0, 2, 1]);
+            feats = Tensor::upsample_linear1d(&feats, [feats.size()[2] * 2], false, None);
+            feats = feats.permute(&[0, 2, 1]);
+        }
 
         // Truncate to p_len
         feats = feats.i((.., ..p_len as i64, ..));
@@ -489,8 +516,13 @@ impl RVC {
         let final_audio = if (factor - 1.0).abs() > 0.001 {
             self.apply_formant_shift(infered_audio, factor, return_length)?
         } else {
-            // Convert tensor to vector
-            let audio_vec: Vec<f32> = infered_audio
+            // Convert tensor to vector - flatten if multidimensional
+            let flattened_audio = if infered_audio.dim() > 1 {
+                infered_audio.flatten(0, -1)
+            } else {
+                infered_audio
+            };
+            let audio_vec: Vec<f32> = flattened_audio
                 .try_into()
                 .map_err(|e| format!("Tensor conversion error: {:?}", e))?;
             audio_vec
@@ -544,8 +576,13 @@ impl RVC {
         factor: f32,
         return_length: usize,
     ) -> Result<Vec<f32>, String> {
-        // Convert tensor to vector
-        let audio_vec: Vec<f32> = audio
+        // Convert tensor to vector - flatten if multidimensional
+        let flattened_audio = if audio.dim() > 1 {
+            audio.flatten(0, -1)
+        } else {
+            audio
+        };
+        let audio_vec: Vec<f32> = flattened_audio
             .try_into()
             .map_err(|e| format!("Tensor conversion error: {:?}", e))?;
 
@@ -1005,6 +1042,7 @@ mod tests {
         assert_eq!(rvc.version, "v2");
         assert!(rvc.is_half);
         assert!(!rvc.model_loaded);
+        // HuBERT should not be loaded since model is not loaded
         assert!(!rvc.hubert_loaded);
         assert!(!rvc.index_loaded);
     }
@@ -1034,6 +1072,7 @@ mod tests {
         let info = rvc.get_model_info();
 
         assert!(!info.model_loaded);
+        // HuBERT should not be loaded by default when no model is loaded
         assert!(!info.hubert_loaded);
         assert!(!info.index_loaded);
         assert_eq!(info.target_sr, 40000);
