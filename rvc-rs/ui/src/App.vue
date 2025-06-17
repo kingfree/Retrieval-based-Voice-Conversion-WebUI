@@ -201,13 +201,13 @@
 import { ref, watch, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
-const hostapis = ["Default"];
-const inputDevices = ["Input"];
-const outputDevices = ["Output"];
+const hostapis = ref([]);
+const inputDevices = ref([]);
+const outputDevices = ref([]);
 
 let pth = "";
 let index = "";
-const hostapi = ref(hostapis[0]);
+const hostapi = ref("");
 const wasapiExclusive = ref(false);
 const inputDevice = ref("");
 const outputDevice = ref("");
@@ -236,6 +236,26 @@ function send(event, value) {
     invoke("frontend_event", { event, value: value?.toString() });
 }
 
+async function fetchDevices() {
+    try {
+        const list = await invoke("update_devices", { hostapi: hostapi.value });
+        hostapis.value = list.hostapis;
+        inputDevices.value = list.input_devices;
+        outputDevices.value = list.output_devices;
+        if (!hostapis.value.includes(hostapi.value)) {
+            hostapi.value = hostapis.value[0] || "";
+        }
+        if (!inputDevices.value.includes(inputDevice.value)) {
+            inputDevice.value = inputDevices.value[0] || "";
+        }
+        if (!outputDevices.value.includes(outputDevice.value)) {
+            outputDevice.value = outputDevices.value[0] || "";
+        }
+    } catch (e) {
+        console.error("failed to fetch devices", e);
+    }
+}
+
 async function loadConfig() {
     try {
         const cfg = await invoke("get_init_config");
@@ -255,6 +275,7 @@ async function loadConfig() {
         extraTime.value = cfg.extra_time;
         f0method.value = cfg.f0method;
         usePv.value = cfg.use_pv;
+        await fetchDevices();
     } catch (e) {
         console.error("failed to load config", e);
     }
@@ -277,9 +298,16 @@ watch(iNoiseReduce, (v) => send("I_noise_reduce", v));
 watch(oNoiseReduce, (v) => send("O_noise_reduce", v));
 watch(usePv, (v) => send("use_pv", v));
 watch(functionMode, (v) => send("function_mode", v));
+watch(hostapi, (v) => {
+    send("sg_hostapi", v);
+    fetchDevices();
+});
+watch(inputDevice, (v) => send("sg_input_device", v));
+watch(outputDevice, (v) => send("sg_output_device", v));
 
 function reloadDevices() {
     send("reload_devices");
+    fetchDevices();
 }
 
 function startVc() {
