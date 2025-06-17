@@ -72,6 +72,7 @@
                         />
                         使用设备采样率</label
                     >
+                    <span class="info">采样率: {{ sampleRate }}</span>
                 </div>
             </section>
         </div>
@@ -106,6 +107,34 @@
                         v-model.number="formant"
                     />
                 </div>
+                <div class="slider">
+                    <label>Index Rate {{ indexRate }}</label>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        v-model.number="indexRate"
+                    />
+                </div>
+                <div class="slider">
+                    <label>响度因子 {{ rmsMixRate }}</label>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        v-model.number="rmsMixRate"
+                    />
+                </div>
+                <div>
+                    <label>音高算法:</label>
+                    <label><input type="radio" value="pm" v-model="f0method" />pm</label>
+                    <label><input type="radio" value="harvest" v-model="f0method" />harvest</label>
+                    <label><input type="radio" value="crepe" v-model="f0method" />crepe</label>
+                    <label><input type="radio" value="rmvpe" v-model="f0method" />rmvpe</label>
+                    <label><input type="radio" value="fcpe" v-model="f0method" />fcpe</label>
+                </div>
             </section>
 
             <section>
@@ -130,26 +159,55 @@
                         v-model.number="crossfadeLength"
                     />
                 </div>
+                <div class="slider">
+                    <label>harvest进程数 {{ nCpu }}</label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="8"
+                        step="1"
+                        v-model.number="nCpu"
+                    />
+                </div>
+                <div class="slider">
+                    <label>额外推理时长 {{ extraTime }}</label>
+                    <input
+                        type="range"
+                        min="0.05"
+                        max="5"
+                        step="0.01"
+                        v-model.number="extraTime"
+                    />
+                </div>
+                <div>
+                    <label><input type="checkbox" v-model="iNoiseReduce" /> 输入降噪</label>
+                    <label><input type="checkbox" v-model="oNoiseReduce" /> 输出降噪</label>
+                    <label><input type="checkbox" v-model="usePv" /> 启用相位声码器</label>
+                </div>
             </section>
         </div>
         <div class="actions">
             <button type="button" @click="startVc">开始音频转换</button>
             <button type="button" @click="stopVc">停止音频转换</button>
+            <label><input type="radio" value="im" v-model="functionMode" /> 输入监听</label>
+            <label><input type="radio" value="vc" v-model="functionMode" /> 输出变声</label>
+            <span class="info">算法延迟: {{ delayTime }} ms</span>
+            <span class="info">推理时间: {{ inferTime }} ms</span>
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
-const hostapis = ["Default"];
-const inputDevices = ["Input"];
-const outputDevices = ["Output"];
+const hostapis = ref([]);
+const inputDevices = ref([]);
+const outputDevices = ref([]);
 
 let pth = "";
 let index = "";
-const hostapi = ref(hostapis[0]);
+const hostapi = ref("");
 const wasapiExclusive = ref(false);
 const inputDevice = ref("");
 const outputDevice = ref("");
@@ -158,26 +216,144 @@ const srType = ref("sr_model");
 const threshold = ref(-60);
 const pitch = ref(0);
 const formant = ref(0.0);
+const indexRate = ref(0.0);
+const rmsMixRate = ref(0.0);
+const f0method = ref("fcpe");
 
 const blockTime = ref(0.25);
 const crossfadeLength = ref(0.05);
+const nCpu = ref(1);
+const extraTime = ref(2.5);
+const iNoiseReduce = ref(false);
+const oNoiseReduce = ref(false);
+const usePv = ref(false);
+const functionMode = ref("vc");
+const sampleRate = ref(0);
+const delayTime = ref(0);
+const inferTime = ref(0);
 
 function send(event, value) {
     invoke("frontend_event", { event, value: value?.toString() });
 }
+
+async function fetchDevices() {
+    try {
+        const list = await invoke("update_devices", { hostapi: hostapi.value });
+        hostapis.value = list.hostapis;
+        inputDevices.value = list.input_devices;
+        outputDevices.value = list.output_devices;
+        if (!hostapis.value.includes(hostapi.value)) {
+            hostapi.value = hostapis.value[0] || "";
+        }
+        if (!inputDevices.value.includes(inputDevice.value)) {
+            inputDevice.value = inputDevices.value[0] || "";
+        }
+        if (!outputDevices.value.includes(outputDevice.value)) {
+            outputDevice.value = outputDevices.value[0] || "";
+        }
+    } catch (e) {
+        console.error("failed to fetch devices", e);
+    }
+}
+
+async function applyDevices() {
+    try {
+        sampleRate.value = await invoke("set_devices", {
+            hostapi: hostapi.value,
+            inputDevice: inputDevice.value,
+            outputDevice: outputDevice.value,
+        });
+    } catch (e) {
+        console.error("failed to set devices", e);
+    }
+}
+
+async function loadConfig() {
+    try {
+        const cfg = await invoke("get_init_config");
+        hostapi.value = cfg.sg_hostapi;
+        wasapiExclusive.value = cfg.sg_wasapi_exclusive;
+        inputDevice.value = cfg.sg_input_device;
+        outputDevice.value = cfg.sg_output_device;
+        srType.value = cfg.sr_type;
+        threshold.value = cfg.threhold ?? cfg.threshold;
+        pitch.value = cfg.pitch;
+        formant.value = cfg.formant;
+        indexRate.value = cfg.index_rate;
+        rmsMixRate.value = cfg.rms_mix_rate;
+        blockTime.value = cfg.block_time;
+        crossfadeLength.value = cfg.crossfade_length;
+        nCpu.value = cfg.n_cpu;
+        extraTime.value = cfg.extra_time;
+        f0method.value = cfg.f0method;
+        usePv.value = cfg.use_pv;
+        await fetchDevices();
+        await applyDevices();
+    } catch (e) {
+        console.error("failed to load config", e);
+    }
+}
+
+onMounted(loadConfig);
 
 watch(threshold, (v) => send("threshold", v));
 watch(pitch, (v) => send("pitch", v));
 watch(formant, (v) => send("formant", v));
 watch(blockTime, (v) => send("block_time", v));
 watch(crossfadeLength, (v) => send("crossfade_length", v));
+watch(srType, (v) => send("sr_type", v));
+watch(indexRate, (v) => send("index_rate", v));
+watch(rmsMixRate, (v) => send("rms_mix_rate", v));
+watch(f0method, (v) => send("f0method", v));
+watch(nCpu, (v) => send("n_cpu", v));
+watch(extraTime, (v) => send("extra_time", v));
+watch(iNoiseReduce, (v) => send("I_noise_reduce", v));
+watch(oNoiseReduce, (v) => send("O_noise_reduce", v));
+watch(usePv, (v) => send("use_pv", v));
+watch(functionMode, (v) => send("function_mode", v));
+watch(hostapi, (v) => {
+    send("sg_hostapi", v);
+    fetchDevices().then(applyDevices);
+});
+watch(inputDevice, (v) => {
+    send("sg_input_device", v);
+    applyDevices();
+});
+watch(outputDevice, (v) => {
+    send("sg_output_device", v);
+    applyDevices();
+});
 
 function reloadDevices() {
     send("reload_devices");
+    fetchDevices();
 }
 
 function startVc() {
-    send("start_vc");
+    invoke("set_values", {
+        values: {
+            pth_path: pth,
+            index_path: index,
+            sg_hostapi: hostapi.value,
+            sg_wasapi_exclusive: wasapiExclusive.value,
+            sg_input_device: inputDevice.value,
+            sg_output_device: outputDevice.value,
+            sr_type: srType.value,
+            threhold: threshold.value,
+            pitch: pitch.value,
+            formant: formant.value,
+            index_rate: indexRate.value,
+            rms_mix_rate: rmsMixRate.value,
+            block_time: blockTime.value,
+            crossfade_length: crossfadeLength.value,
+            extra_time: extraTime.value,
+            n_cpu: nCpu.value,
+            use_pv: usePv.value,
+            f0method: f0method.value,
+            I_noise_reduce: iNoiseReduce.value,
+            O_noise_reduce: oNoiseReduce.value,
+        },
+    }).then(() => send("start_vc"));
 }
 
 function stopVc() {
@@ -209,5 +385,8 @@ section {
     display: flex;
     gap: 1rem;
     margin-top: 1rem;
+}
+.info {
+    margin-left: 1rem;
 }
 </style>
