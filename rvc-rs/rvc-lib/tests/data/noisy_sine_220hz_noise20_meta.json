@@ -1,0 +1,10 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 1600,
+  "f0_length": 10,
+  "description": "220 Hz sine wave with 20.0% noise",
+  "frequency": 220,
+  "duration": 0.1,
+  "signal_type": "noisy_sine",
+  "noise_level": 0.2
+}

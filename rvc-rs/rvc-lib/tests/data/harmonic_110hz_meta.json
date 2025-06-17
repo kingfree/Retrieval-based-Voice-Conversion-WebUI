@@ -1,0 +1,23 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 2400,
+  "f0_length": 15,
+  "description": "Complex harmonic signal with fundamental at 110 Hz",
+  "frequency": 110,
+  "duration": 0.15,
+  "signal_type": "harmonic",
+  "harmonics": [
+    [
+      1,
+      1.0
+    ],
+    [
+      2,
+      0.5
+    ],
+    [
+      3,
+      0.25
+    ]
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 1600,
+  "f0_length": 10,
+  "description": "Pure sine wave at 50 Hz",
+  "frequency": 50,
+  "duration": 0.1,
+  "signal_type": "sine"
+}

@@ -1,0 +1,9 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 160,
+  "f0_length": 1,
+  "description": "Very short 440 Hz sine wave (10ms)",
+  "frequency": 440,
+  "duration": 0.01,
+  "signal_type": "short_sine"
+}

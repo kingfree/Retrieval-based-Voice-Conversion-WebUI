@@ -1,0 +1,9 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 1600,
+  "f0_length": 10,
+  "description": "220 Hz sine wave with amplitude modulation",
+  "frequency": 220,
+  "duration": 0.1,
+  "signal_type": "amplitude_modulated"
+}

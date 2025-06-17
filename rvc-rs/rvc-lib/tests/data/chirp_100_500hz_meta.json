@@ -1,0 +1,11 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 3200,
+  "f0_length": 20,
+  "description": "Linear frequency sweep from 100 Hz to 500 Hz",
+  "frequency": null,
+  "duration": 0.2,
+  "signal_type": "chirp",
+  "f_start": 100,
+  "f_end": 500
+}

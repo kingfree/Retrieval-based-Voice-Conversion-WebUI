@@ -1,0 +1,9 @@
+{
+  "sample_rate": 16000,
+  "signal_length": 1600,
+  "f0_length": 10,
+  "description": "Edge case frequency at 1099 Hz",
+  "frequency": 1099,
+  "duration": 0.1,
+  "signal_type": "edge_case"
+}
