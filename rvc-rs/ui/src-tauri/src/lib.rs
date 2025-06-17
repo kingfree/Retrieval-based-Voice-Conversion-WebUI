@@ -1,13 +1,13 @@
 use log::info;
-use rvc_lib::{start_vc, DeviceInfo, GUIConfig, GUI, VC};
+use rvc_lib::{start_vc, DeviceInfo, GUIConfig, GUI};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
 // Global state for voice conversion
+/// 只存储配置和运行状态，不再存储 VC 句柄（VC 不是 Send/Sync，不能放在 State）
 struct VcState {
     config: Arc<Mutex<GUIConfig>>,
     is_running: Arc<Mutex<bool>>,
-    handle: Arc<Mutex<Option<VC>>>,
     delay_time: Arc<Mutex<f32>>,
     function_mode: Arc<Mutex<String>>,
 }
@@ -17,7 +17,6 @@ impl Default for VcState {
         Self {
             config: Arc::new(Mutex::new(GUIConfig::default())),
             is_running: Arc::new(Mutex::new(false)),
-            handle: Arc::new(Mutex::new(None)),
             delay_time: Arc::new(Mutex::new(0.0)),
             function_mode: Arc::new(Mutex::new("vc".into())),
         }
@@ -73,19 +72,22 @@ async fn event_handler(
                 // Save current configuration
                 GUI::save(&config).map_err(|e| e.to_string())?;
 
-                // Start voice conversion
+                // Start voice conversion（VC 句柄不再存储于 State）
                 match start_vc() {
-                    Ok(vc_handle) => {
-                        *state.inner().handle.lock().unwrap() = Some(vc_handle);
+                    Ok(_vc_handle) => {
                         *is_running = true;
 
                         // Calculate initial delay time like Python implementation
-                        let mut delay = config.block_time + config.crossfade_length + 0.01;
-                        if config.i_noise_reduce {
-                            delay += config.crossfade_length.min(0.04);
-                        }
+                        let delay = config.block_time
+                            + config.crossfade_length
+                            + 0.01
+                            + if config.i_noise_reduce {
+                                config.crossfade_length.min(0.04)
+                            } else {
+                                0.0
+                            };
                         *state.inner().delay_time.lock().unwrap() = delay;
-                        app.emit("delay_time", &((*delay * 1000.0).round() as u32))
+                        app.emit("delay_time", &((delay * 1000.0).round() as u32))
                             .unwrap();
 
                         app.emit("vc_started", ()).unwrap();
@@ -101,7 +103,7 @@ async fn event_handler(
         "stop_vc" => {
             if *is_running {
                 info!("Stopping voice conversion...");
-                *state.inner().handle.lock().unwrap() = None;
+                // VC 句柄不再存储于 State，无需手动 drop
                 *is_running = false;
                 app.emit("vc_stopped", ()).unwrap();
                 info!("Voice conversion stopped");
@@ -121,11 +123,7 @@ async fn event_handler(
             if let Some(val) = value {
                 if let Ok(pitch) = val.parse::<f32>() {
                     config.pitch = pitch;
-                    if *is_running {
-                        if let Some(vc) = &*state.inner().handle.lock().unwrap() {
-                            vc.change_key(pitch);
-                        }
-                    }
+                    // 实时参数变更暂时无法直接作用于 VC 实例
                 }
             }
         }
@@ -134,11 +132,7 @@ async fn event_handler(
             if let Some(val) = value {
                 if let Ok(formant) = val.parse::<f32>() {
                     config.formant = formant;
-                    if *is_running {
-                        if let Some(vc) = &*state.inner().handle.lock().unwrap() {
-                            vc.change_formant(formant);
-                        }
-                    }
+                    // 实时参数变更暂时无法直接作用于 VC 实例
                 }
             }
         }
@@ -147,11 +141,7 @@ async fn event_handler(
             if let Some(val) = value {
                 if let Ok(rate) = val.parse::<f32>() {
                     config.index_rate = rate;
-                    if *is_running {
-                        if let Some(vc) = &*state.inner().handle.lock().unwrap() {
-                            vc.change_index_rate(rate);
-                        }
-                    }
+                    // 实时参数变更暂时无法直接作用于 VC 实例
                 }
             }
         }
@@ -173,12 +163,17 @@ async fn event_handler(
         "I_noise_reduce" => {
             if let Some(val) = value {
                 let flag = val.parse().unwrap_or(false);
-                let delta = if flag { config.crossfade_length.min(0.04) } else { -config.crossfade_length.min(0.04) };
+                let delta = if flag {
+                    config.crossfade_length.min(0.04)
+                } else {
+                    -config.crossfade_length.min(0.04)
+                };
                 config.i_noise_reduce = flag;
                 if *is_running {
                     let mut d = state.inner().delay_time.lock().unwrap();
                     *d += delta;
-                    app.emit("delay_time", &((*d * 1000.0).round() as u32)).unwrap();
+                    app.emit("delay_time", &((*d * 1000.0).round() as u32))
+                        .unwrap();
                 }
             }
         }
