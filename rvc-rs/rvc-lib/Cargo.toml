@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 realfft = "3.5"
+rsworld-sys = "0.1"
 

@@ -3,6 +3,9 @@ pub fn greet(name: &str) -> String {
     format!("Hello, {name} from rvc-lib!")
 }
 
+mod harvest;
+pub use harvest::Harvest;
+
 /// Blend two overlapping audio buffers using a phase vocoder crossfade.
 ///
 /// `a` and `b` are the buffers to be blended, typically the previous and
