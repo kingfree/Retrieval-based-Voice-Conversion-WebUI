@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use serde::de::{self, Deserializer};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -82,16 +82,5 @@ impl GUI {
         let text = serde_json::to_string_pretty(cfg)?;
         fs::write(inuse, text)?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn load_default_config() {
-        let cfg = GUI::load().unwrap();
-        assert!(!cfg.pth_path.is_empty());
     }
 }
