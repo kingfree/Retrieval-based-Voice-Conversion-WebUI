@@ -27,8 +27,10 @@ pub struct GUIConfig {
     pub use_jit: bool,
     pub use_pv: bool,
     pub f0method: String,
-    pub I_noise_reduce: bool,
-    pub O_noise_reduce: bool,
+    #[serde(rename = "I_noise_reduce")]
+    pub i_noise_reduce: bool,
+    #[serde(rename = "O_noise_reduce")]
+    pub o_noise_reduce: bool,
 }
 
 impl Default for GUIConfig {
@@ -53,8 +55,8 @@ impl Default for GUIConfig {
             use_jit: false,
             use_pv: false,
             f0method: "rmvpe".to_string(),
-            I_noise_reduce: false,
-            O_noise_reduce: false,
+            i_noise_reduce: false,
+            o_noise_reduce: false,
         }
     }
 }
@@ -104,5 +106,31 @@ impl GUI {
         let text = serde_json::to_string_pretty(cfg)?;
         fs::write(inuse, text)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frontend_flow_invalid_devices() {
+        // load default config
+        let mut cfg = GUI::load().expect("load config");
+        cfg.pitch = 1.23;
+        GUI::save(&cfg).expect("save config");
+
+        // verify save
+        let loaded = GUI::load().expect("reload");
+        assert_eq!(loaded.pitch, 1.23);
+
+        // try enumerating devices (may fail on CI)
+        let _ = crate::update_devices(None);
+
+        // selecting invalid devices should fail
+        assert!(crate::set_devices("none", "in", "out").is_err());
+
+        // without valid devices, starting VC fails
+        assert!(crate::start_vc().is_err());
     }
 }
