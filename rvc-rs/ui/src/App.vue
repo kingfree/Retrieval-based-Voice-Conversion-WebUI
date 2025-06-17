@@ -283,7 +283,30 @@ function reloadDevices() {
 }
 
 function startVc() {
-    send("start_vc");
+    invoke("set_values", {
+        values: {
+            pth_path: pth,
+            index_path: index,
+            sg_hostapi: hostapi.value,
+            sg_wasapi_exclusive: wasapiExclusive.value,
+            sg_input_device: inputDevice.value,
+            sg_output_device: outputDevice.value,
+            sr_type: srType.value,
+            threhold: threshold.value,
+            pitch: pitch.value,
+            formant: formant.value,
+            index_rate: indexRate.value,
+            rms_mix_rate: rmsMixRate.value,
+            block_time: blockTime.value,
+            crossfade_length: crossfadeLength.value,
+            extra_time: extraTime.value,
+            n_cpu: nCpu.value,
+            use_pv: usePv.value,
+            f0method: f0method.value,
+            I_noise_reduce: iNoiseReduce.value,
+            O_noise_reduce: oNoiseReduce.value,
+        },
+    }).then(() => send("start_vc"));
 }
 
 function stopVc() {

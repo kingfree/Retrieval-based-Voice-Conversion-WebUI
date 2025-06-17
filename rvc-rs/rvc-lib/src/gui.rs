@@ -73,6 +73,16 @@ impl GUI {
         let cfg: GUIConfig = serde_json::from_str(&text)?;
         Ok(cfg)
     }
+
+    pub fn save(cfg: &GUIConfig) -> Result<(), Box<dyn std::error::Error>> {
+        let (inuse, _) = Self::config_paths();
+        if let Some(parent) = inuse.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let text = serde_json::to_string_pretty(cfg)?;
+        fs::write(inuse, text)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

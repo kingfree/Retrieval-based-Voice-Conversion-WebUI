@@ -15,10 +15,15 @@ fn get_init_config() -> Result<GUIConfig, String> {
   GUI::load().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn set_values(values: GUIConfig) -> Result<(), String> {
+  GUI::save(&values).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![frontend_event, get_init_config])
+    .invoke_handler(tauri::generate_handler![frontend_event, get_init_config, set_values])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
