@@ -8,7 +8,7 @@
                     <input
                         type="file"
                         accept=".pth"
-                        @change="(e) => (pth = e.target.files[0]?.name || '')"
+                        @change="(e) => (pth.value = e.target.files[0]?.name || '')"
                     />
                 </div>
                 <div>
@@ -16,7 +16,7 @@
                     <input
                         type="file"
                         accept=".index"
-                        @change="(e) => (index = e.target.files[0]?.name || '')"
+                        @change="(e) => (index.value = e.target.files[0]?.name || '')"
                     />
                 </div>
             </section>
@@ -252,8 +252,8 @@ const hostapis = ref([]);
 const inputDevices = ref([]);
 const outputDevices = ref([]);
 
-let pth = "";
-let index = "";
+const pth = ref("");
+const index = ref("");
 const hostapi = ref("");
 const wasapiExclusive = ref(false);
 const inputDevice = ref("");
@@ -353,6 +353,10 @@ onMounted(async () => {
         console.log("Voice conversion stopped");
     });
 
+    await listen("delay_time", (event) => {
+        delayTime.value = Number(event.payload);
+    });
+
     await listen("devices_updated", (event) => {
         console.log("Devices updated:", event.payload);
         const deviceInfo = event.payload;
@@ -373,10 +377,13 @@ watch(rmsMixRate, (v) => send("rms_mix_rate", v));
 watch(f0method, (v) => send("f0method", v));
 watch(nCpu, (v) => send("n_cpu", v));
 watch(extraTime, (v) => send("extra_time", v));
+watch(pth, (v) => send("pth_path", v));
+watch(index, (v) => send("index_path", v));
 watch(iNoiseReduce, (v) => send("I_noise_reduce", v));
 watch(oNoiseReduce, (v) => send("O_noise_reduce", v));
 watch(usePv, (v) => send("use_pv", v));
 watch(functionMode, (v) => send("function_mode", v));
+watch(wasapiExclusive, (v) => send("sg_wasapi_exclusive", v));
 watch(hostapi, async (v) => {
     try {
         await invoke("event_handler", { event: "sg_hostapi", value: v });
@@ -417,8 +424,8 @@ async function startVc() {
         // Save configuration first
         await invoke("set_values", {
             values: {
-                pth_path: pth,
-                index_path: index,
+                pth_path: pth.value,
+                index_path: index.value,
                 sg_hostapi: hostapi.value,
                 sg_wasapi_exclusive: wasapiExclusive.value,
                 sg_input_device: inputDevice.value,
