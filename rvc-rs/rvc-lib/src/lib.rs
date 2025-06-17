@@ -22,6 +22,9 @@ pub use devices::{
 mod realtime;
 pub use realtime::{start_vc, VC};
 
+mod rvc_for_realtime;
+pub use rvc_for_realtime::RVC;
+
 /// Blend two overlapping audio buffers using a phase vocoder crossfade.
 ///
 /// `a` and `b` are the buffers to be blended, typically the previous and
