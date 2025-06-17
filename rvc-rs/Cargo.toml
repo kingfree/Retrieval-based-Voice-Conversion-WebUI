@@ -1,0 +1,3 @@
+[workspace]
+members = ["rvc-lib", "tauri-app"]
+resolver = "2"

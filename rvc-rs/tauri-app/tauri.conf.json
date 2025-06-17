@@ -1,0 +1,22 @@
+{
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../ui",
+    "distDir": "../ui/dist"
+  },
+  "package": {
+    "productName": "rvc-rs",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "RVC-RS",
+        "width": 800,
+        "height": 600
+      }
+    ]
+  }
+}
