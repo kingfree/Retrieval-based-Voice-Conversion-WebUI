@@ -22,7 +22,7 @@ mod rvc_for_realtime;
 pub use rvc_for_realtime::RVC;
 
 use std::f64::consts::PI;
-use tch::{Device, IndexOp, Kind, Tensor};
+use tch::{IndexOp, Kind, Tensor};
 
 pub fn phase_vocoder(a: &Tensor, b: &Tensor, fade_out: &Tensor, fade_in: &Tensor) -> Tensor {
     let window = (fade_out * fade_in).sqrt();
@@ -30,7 +30,7 @@ pub fn phase_vocoder(a: &Tensor, b: &Tensor, fade_out: &Tensor, fade_in: &Tensor
     let fb = (b * &window).fft_rfft(None, -1, "backward");
 
     let absab = fa.abs() + fb.abs();
-    let mut absab = absab.shallow_clone();
+    let absab = absab.shallow_clone();
 
     let n = a.size()[0] as i64;
     let n_half = n / 2 + 1;
@@ -38,11 +38,11 @@ pub fn phase_vocoder(a: &Tensor, b: &Tensor, fade_out: &Tensor, fade_in: &Tensor
     if n % 2 == 0 {
         // even length: [1, ..., n/2 - 1]
         let idx = 1..(n_half - 1);
-        absab.i(idx).f_mul_(&Tensor::from(2.0));
+        let _ = absab.i(idx).f_mul_(&Tensor::from(2.0));
     } else {
         // odd length: [1, ..., n/2]
         let idx = 1..n_half;
-        absab.i(idx).f_mul_(&Tensor::from(2.0));
+        let _ = absab.i(idx).f_mul_(&Tensor::from(2.0));
     }
 
     let phia = fa.angle();

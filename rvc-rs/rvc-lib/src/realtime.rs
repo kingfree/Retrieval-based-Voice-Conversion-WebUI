@@ -1,9 +1,9 @@
-use std::sync::{Arc, Mutex};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use tch::{Device, Kind, Tensor};
 use crate::phase_vocoder;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use std::sync::{Arc, Mutex};
+use tch::Tensor;
 
-use crate::{get_device_channels, GUI, rvc_for_realtime::RVC};
+use crate::{GUI, get_device_channels, rvc_for_realtime::RVC};
 
 /// Handle for an active voice conversion stream.
 ///
@@ -19,22 +19,27 @@ pub struct VC {
 ///
 /// This currently just copies audio from the input device to the output device.
 pub fn start_vc() -> Result<VC, String> {
-    let selected = crate::devices::selected_devices()
-        .ok_or_else(|| "devices not set".to_string())?;
+    let selected =
+        crate::devices::selected_devices().ok_or_else(|| "devices not set".to_string())?;
 
     let cfg = GUI::load().map_err(|e| e.to_string())?;
     let rvc = Arc::new(Mutex::new(RVC::new(&cfg)));
 
     // prepare crossfade windows for smoother output
-    let crossfade_frames =
-        (cfg.crossfade_length * selected.sample_rate as f32).round() as usize;
+    let crossfade_frames = (cfg.crossfade_length * selected.sample_rate as f32).round() as usize;
     let crossfade_frames = crossfade_frames.max(1);
-    let fade_pos = Tensor::arange(crossfade_frames as i64, (Kind::Float, Device::Cpu))
-        / ((crossfade_frames - 1) as f64);
-    let fade_in_window = (fade_pos * (0.5 * std::f64::consts::PI)).sin().pow_tensor_scalar(2.0);
-    let fade_out_window = Tensor::from(1.0) - &fade_in_window;
-    let fade_in_window = Arc::new(fade_in_window);
-    let fade_out_window = Arc::new(fade_out_window);
+
+    // Create fade windows as Vec<f32> to avoid thread safety issues with Tensor
+    let mut fade_in_vec = Vec::with_capacity(crossfade_frames);
+    let mut fade_out_vec = Vec::with_capacity(crossfade_frames);
+    for i in 0..crossfade_frames {
+        let pos = i as f32 / (crossfade_frames - 1) as f32;
+        let fade_in_val = (pos * (0.5 * std::f32::consts::PI)).sin().powi(2);
+        fade_in_vec.push(fade_in_val);
+        fade_out_vec.push(1.0 - fade_in_val);
+    }
+    let fade_in_window = Arc::new(fade_in_vec);
+    let fade_out_window = Arc::new(fade_out_vec);
     let prev_chunk: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
 
     let host_id = cpal::available_hosts()
@@ -47,12 +52,20 @@ pub fn start_vc() -> Result<VC, String> {
     let input = host
         .input_devices()
         .map_err(|e| e.to_string())?
-        .find(|d| d.name().map(|n| n == selected.input_device).unwrap_or(false))
+        .find(|d| {
+            d.name()
+                .map(|n| n == selected.input_device)
+                .unwrap_or(false)
+        })
         .ok_or_else(|| format!("input device '{}' not found", selected.input_device))?;
     let output = host
         .output_devices()
         .map_err(|e| e.to_string())?
-        .find(|d| d.name().map(|n| n == selected.output_device).unwrap_or(false))
+        .find(|d| {
+            d.name()
+                .map(|n| n == selected.output_device)
+                .unwrap_or(false)
+        })
         .ok_or_else(|| format!("output device '{}' not found", selected.output_device))?;
 
     let channels = get_device_channels()?;
@@ -81,8 +94,9 @@ pub fn start_vc() -> Result<VC, String> {
                     if len > 0 {
                         let a = Tensor::from_slice(&last[last.len() - len..]);
                         let b = Tensor::from_slice(&processed[..len]);
-                        let fade_out = fade_out_c.i((crossfade_frames - len) as i64..);
-                        let fade_in = fade_in_c.i((crossfade_frames - len) as i64..);
+                        let fade_out_start = crossfade_frames - len;
+                        let fade_out = Tensor::from_slice(&fade_out_c[fade_out_start..]);
+                        let fade_in = Tensor::from_slice(&fade_in_c[fade_out_start..]);
                         let result = phase_vocoder(&a, &b, &fade_out, &fade_in);
                         let res_vec: Vec<f32> = Vec::<f32>::try_from(result).unwrap();
                         processed[..len].copy_from_slice(&res_vec);
