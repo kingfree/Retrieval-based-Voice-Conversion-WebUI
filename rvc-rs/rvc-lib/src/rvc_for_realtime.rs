@@ -1,4 +1,4 @@
-use crate::GUIConfig;
+use crate::{GUIConfig, Harvest};
 
 /// Minimal placeholder for realtime voice conversion logic.
 ///
@@ -35,6 +35,31 @@ impl RVC {
         // TODO: call voice conversion models.
         let _ = (self.pitch, self.formant); // suppress unused warnings
         input.to_vec()
+    }
+
+    /// Extract F0 from an audio buffer using the specified method and
+    /// convert it into coarse representation.
+    ///
+    /// Currently only the `harvest` method is implemented.
+    pub fn get_f0(
+        &self,
+        x: &[f32],
+        f0_up_key: f32,
+        method: &str,
+    ) -> (Vec<u8>, Vec<f32>) {
+        let f0: Vec<f32> = match method {
+            "harvest" | _ => {
+                let extractor = Harvest::new(16000);
+                extractor
+                    .compute(x)
+                    .into_iter()
+                    .map(|v| v as f32)
+                    .collect()
+            }
+        };
+        let scale = (2.0f32).powf(f0_up_key / 12.0);
+        let f0: Vec<f32> = f0.into_iter().map(|v| v * scale).collect();
+        self.get_f0_post(&f0)
     }
 
     /// Convert raw F0 values into 8-bit coarse representation on the mel scale.
@@ -78,6 +103,16 @@ mod tests {
         assert_eq!(coarse[3], 255);
         // Intermediate value should be in range
         assert!(coarse[2] > 1 && coarse[2] < 255);
+    }
+
+    #[test]
+    fn test_get_f0_harvest_zero_signal() {
+        let cfg = GUIConfig::default();
+        let rvc = RVC::from_config(&cfg);
+        let input = vec![0.0f32; 160];
+        let (coarse, f0) = rvc.get_f0(&input, 0.0, "harvest");
+        assert!(f0.iter().all(|&v| v == 0.0));
+        assert!(coarse.iter().all(|&c| c == 1));
     }
 }
 
