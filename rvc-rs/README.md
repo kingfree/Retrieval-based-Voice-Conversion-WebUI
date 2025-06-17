@@ -10,6 +10,10 @@ Cargo workspace:
 ## Building
 
 1. Install Rust.
+   On Linux, ensure the ALSA development headers are available:
+   ```bash
+   sudo apt-get install libasound2-dev
+   ```
 2. Build the library:
    ```bash
    cargo check -p rvc-lib
