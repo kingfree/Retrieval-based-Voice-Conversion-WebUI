@@ -26,3 +26,9 @@ rmvpe.pt
 /assets/weights/*
 ffmpeg.*
 ffprobe.*
+rvc-rs/target/
+
+rvc-rs/ui/node_modules/
+rvc-rs/ui/dist/
+rvc-rs/Cargo.lock
+rvc-rs/ui/package-lock.json
