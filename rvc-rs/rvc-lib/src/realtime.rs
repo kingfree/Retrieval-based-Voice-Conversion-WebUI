@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use tch::{Device, Kind, Tensor};
+use crate::phase_vocoder;
 
 use crate::{get_device_channels, GUI, rvc_for_realtime::RVC};
 
@@ -22,6 +24,18 @@ pub fn start_vc() -> Result<VC, String> {
 
     let cfg = GUI::load().map_err(|e| e.to_string())?;
     let rvc = Arc::new(Mutex::new(RVC::new(&cfg)));
+
+    // prepare crossfade windows for smoother output
+    let crossfade_frames =
+        (cfg.crossfade_length * selected.sample_rate as f32).round() as usize;
+    let crossfade_frames = crossfade_frames.max(1);
+    let fade_pos = Tensor::arange(crossfade_frames as i64, (Kind::Float, Device::Cpu))
+        / ((crossfade_frames - 1) as f64);
+    let fade_in_window = (fade_pos * (0.5 * std::f64::consts::PI)).sin().pow_tensor_scalar(2.0);
+    let fade_out_window = Tensor::from(1.0) - &fade_in_window;
+    let fade_in_window = Arc::new(fade_in_window);
+    let fade_out_window = Arc::new(fade_out_window);
+    let prev_chunk: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
 
     let host_id = cpal::available_hosts()
         .iter()
@@ -51,13 +65,30 @@ pub fn start_vc() -> Result<VC, String> {
     let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
     let buf_in = buffer.clone();
     let rvc_in = rvc.clone();
+    let fade_in_c = fade_in_window.clone();
+    let fade_out_c = fade_out_window.clone();
+    let prev_in = prev_chunk.clone();
     let err_fn = |e| eprintln!("stream error: {e}");
     let input_stream = input
         .build_input_stream(
             &config,
             move |data: &[f32], _| {
                 let mut rvc = rvc_in.lock().unwrap();
-                let processed = rvc.infer(data);
+                let mut processed = rvc.infer(data);
+                let mut last = prev_in.lock().unwrap();
+                if !last.is_empty() {
+                    let len = crossfade_frames.min(last.len()).min(processed.len());
+                    if len > 0 {
+                        let a = Tensor::from_slice(&last[last.len() - len..]);
+                        let b = Tensor::from_slice(&processed[..len]);
+                        let fade_out = fade_out_c.i((crossfade_frames - len) as i64..);
+                        let fade_in = fade_in_c.i((crossfade_frames - len) as i64..);
+                        let result = phase_vocoder(&a, &b, &fade_out, &fade_in);
+                        let res_vec: Vec<f32> = Vec::<f32>::try_from(result).unwrap();
+                        processed[..len].copy_from_slice(&res_vec);
+                    }
+                }
+                *last = processed[processed.len().saturating_sub(crossfade_frames)..].to_vec();
                 buf_in.lock().unwrap().extend_from_slice(&processed);
             },
             err_fn,
