@@ -198,7 +198,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
 const hostapis = ["Default"];
@@ -235,6 +235,32 @@ const inferTime = ref(0);
 function send(event, value) {
     invoke("frontend_event", { event, value: value?.toString() });
 }
+
+async function loadConfig() {
+    try {
+        const cfg = await invoke("get_init_config");
+        hostapi.value = cfg.sg_hostapi;
+        wasapiExclusive.value = cfg.sg_wasapi_exclusive;
+        inputDevice.value = cfg.sg_input_device;
+        outputDevice.value = cfg.sg_output_device;
+        srType.value = cfg.sr_type;
+        threshold.value = cfg.threhold ?? cfg.threshold;
+        pitch.value = cfg.pitch;
+        formant.value = cfg.formant;
+        indexRate.value = cfg.index_rate;
+        rmsMixRate.value = cfg.rms_mix_rate;
+        blockTime.value = cfg.block_time;
+        crossfadeLength.value = cfg.crossfade_length;
+        nCpu.value = cfg.n_cpu;
+        extraTime.value = cfg.extra_time;
+        f0method.value = cfg.f0method;
+        usePv.value = cfg.use_pv;
+    } catch (e) {
+        console.error("failed to load config", e);
+    }
+}
+
+onMounted(loadConfig);
 
 watch(threshold, (v) => send("threshold", v));
 watch(pitch, (v) => send("pitch", v));
