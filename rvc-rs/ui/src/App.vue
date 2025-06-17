@@ -256,6 +256,18 @@ async function fetchDevices() {
     }
 }
 
+async function applyDevices() {
+    try {
+        sampleRate.value = await invoke("set_devices", {
+            hostapi: hostapi.value,
+            inputDevice: inputDevice.value,
+            outputDevice: outputDevice.value,
+        });
+    } catch (e) {
+        console.error("failed to set devices", e);
+    }
+}
+
 async function loadConfig() {
     try {
         const cfg = await invoke("get_init_config");
@@ -276,6 +288,7 @@ async function loadConfig() {
         f0method.value = cfg.f0method;
         usePv.value = cfg.use_pv;
         await fetchDevices();
+        await applyDevices();
     } catch (e) {
         console.error("failed to load config", e);
     }
@@ -300,10 +313,16 @@ watch(usePv, (v) => send("use_pv", v));
 watch(functionMode, (v) => send("function_mode", v));
 watch(hostapi, (v) => {
     send("sg_hostapi", v);
-    fetchDevices();
+    fetchDevices().then(applyDevices);
 });
-watch(inputDevice, (v) => send("sg_input_device", v));
-watch(outputDevice, (v) => send("sg_output_device", v));
+watch(inputDevice, (v) => {
+    send("sg_input_device", v);
+    applyDevices();
+});
+watch(outputDevice, (v) => {
+    send("sg_output_device", v);
+    applyDevices();
+});
 
 function reloadDevices() {
     send("reload_devices");

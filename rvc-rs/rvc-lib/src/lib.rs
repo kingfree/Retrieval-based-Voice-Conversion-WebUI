@@ -9,6 +9,9 @@ pub use harvest::Harvest;
 mod gui;
 pub use gui::{GUIConfig, GUI};
 
+mod devices;
+pub use devices::{DeviceInfo, update_devices, set_devices, selected_sample_rate};
+
 /// Blend two overlapping audio buffers using a phase vocoder crossfade.
 ///
 /// `a` and `b` are the buffers to be blended, typically the previous and

@@ -24,4 +24,3 @@ log = "0.4"
 tauri = { version = "2.5.0", features = [] }
 tauri-plugin-log = "2.0.0-rc"
 rvc-lib = { path = "../../rvc-lib" }
-cpal = "0.16"

@@ -1,6 +1,5 @@
 use log::info;
-use rvc_lib::{GUI, GUIConfig};
-use cpal::traits::{DeviceTrait, HostTrait};
+use rvc_lib::{GUI, GUIConfig, DeviceInfo, update_devices, set_devices as lib_set_devices};
 use serde::Serialize;
 
 /// Print events coming from the front-end.
@@ -22,46 +21,20 @@ fn set_values(values: GUIConfig) -> Result<(), String> {
   GUI::save(&values).map_err(|e| e.to_string())
 }
 
-#[derive(Serialize)]
-struct DeviceInfo {
-  hostapis: Vec<String>,
-  input_devices: Vec<String>,
-  output_devices: Vec<String>,
+#[tauri::command]
+fn update_devices(hostapi: Option<String>) -> Result<DeviceInfo, String> {
+  rvc_lib::update_devices(hostapi.as_deref())
 }
 
 #[tauri::command]
-fn update_devices(hostapi: Option<String>) -> Result<DeviceInfo, String> {
-  let host_ids = cpal::available_hosts();
-  let host_names: Vec<String> = host_ids.iter().map(|id| id.name().to_string()).collect();
-
-  let host = if let Some(name) = hostapi {
-    if let Some(id) = host_ids.iter().find(|id| id.name() == name).copied() {
-      cpal::host_from_id(id).map_err(|e| e.to_string())?
-    } else {
-      cpal::default_host()
-    }
-  } else {
-    cpal::default_host()
-  };
-
-  let input_devices = host
-    .input_devices()
-    .map_err(|e| e.to_string())?
-    .filter_map(|d| d.name().ok())
-    .collect();
-  let output_devices = host
-    .output_devices()
-    .map_err(|e| e.to_string())?
-    .filter_map(|d| d.name().ok())
-    .collect();
-
-  Ok(DeviceInfo { hostapis: host_names, input_devices, output_devices })
+fn set_devices(hostapi: String, input_device: String, output_device: String) -> Result<u32, String> {
+  lib_set_devices(&hostapi, &input_device, &output_device)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![frontend_event, get_init_config, set_values, update_devices])
+    .invoke_handler(tauri::generate_handler![frontend_event, get_init_config, set_values, update_devices, set_devices])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
