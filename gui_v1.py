@@ -2,6 +2,9 @@ import os
 import sys
 from dotenv import load_dotenv
 import shutil
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -239,7 +242,7 @@ if __name__ == "__main__":
                                     initial_folder=os.path.join(
                                         os.getcwd(), "assets/weights"
                                     ),
-                                    file_types=((". pth"),),
+                                    file_types=(("Model files", ". pth"),),
                                 ),
                             ],
                             [
@@ -250,7 +253,7 @@ if __name__ == "__main__":
                                 sg.FileBrowse(
                                     i18n("选择.index文件"),
                                     initial_folder=os.path.join(os.getcwd(), "logs"),
-                                    file_types=((". index"),),
+                                    file_types=(("Model files", ". index"),),
                                 ),
                             ],
                         ],
@@ -705,7 +708,7 @@ if __name__ == "__main__":
             return True
 
         def start_vc(self):
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             self.rvc = rvc_for_realtime.RVC(
                 self.gui_config.pitch,
                 self.gui_config.formant,
@@ -974,8 +977,12 @@ if __name__ == "__main__":
                 + 1e-8
             )
             if sys.platform == "darwin":
-                _, sola_offset = torch.max(cor_nom[0, 0] / cor_den[0, 0])
-                sola_offset = sola_offset.item()
+                # torch.max without a dimension returns only the value
+                # leading to "iteration over a 0-d tensor" when unpacking.
+                # Use argmax and convert to Python int for macOS.
+                sola_offset = torch.argmax(cor_nom[0, 0] / cor_den[0, 0]).item()
+                # _, sola_offset = torch.max(cor_nom[0, 0] / cor_den[0, 0])
+                # sola_offset = sola_offset.item()
             else:
                 sola_offset = torch.argmax(cor_nom[0, 0] / cor_den[0, 0])
             printt("sola_offset = %d", int(sola_offset))

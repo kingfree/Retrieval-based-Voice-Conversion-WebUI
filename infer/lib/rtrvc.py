@@ -96,6 +96,10 @@ class RVC:
             self.resample_kernel = {}
 
             if last_rvc is None:
+                if hasattr(torch.serialization, "add_safe_globals"):
+                    torch.serialization.add_safe_globals(
+                        [fairseq.data.dictionary.Dictionary]
+                    )
                 models, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task(
                     ["assets/hubert/hubert_base.pt"],
                     suffix="",

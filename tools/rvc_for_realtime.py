@@ -61,6 +61,7 @@ class RVC:
         初始化
         """
         try:
+            logger.info("RVC init")
             if config.dml == True:
 
                 def forward_dml(ctx, x, scale):
