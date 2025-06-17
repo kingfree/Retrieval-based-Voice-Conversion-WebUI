@@ -1,6 +1,7 @@
 use crate::{GUIConfig, Harvest};
 use std::collections::HashMap;
 use std::f32::consts::PI;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tch::{Device, IndexOp, Kind, Tensor};
 
@@ -53,6 +54,17 @@ pub struct RVC {
     pub generator_model: Option<Box<dyn std::any::Any + Send + Sync>>, // Generator model
     pub index: Option<Box<dyn std::any::Any + Send + Sync>>,        // Index for similarity search
     pub big_npy: Option<Tensor>, // Big numpy array for index search
+
+    // Streaming state
+    pub streaming: bool, // Whether streaming is active
+    pub stream_handle: Option<Arc<Mutex<StreamHandle>>>, // Handle to streaming resources
+}
+
+/// Handle for managing streaming resources
+#[derive(Default)]
+pub struct StreamHandle {
+    pub buffer: Arc<Mutex<Vec<f32>>>,
+    pub running: bool,
 }
 
 impl RVC {
@@ -110,6 +122,8 @@ impl RVC {
             generator_model: None,
             index: None,
             big_npy: None,
+            streaming: false,
+            stream_handle: None,
         };
 
         // Initialize index if provided and rate > 0
@@ -474,8 +488,11 @@ impl RVC {
             feats = feats.permute(&[0, 2, 1]);
         }
 
-        // Truncate to p_len
-        feats = feats.i((.., ..p_len as i64, ..));
+        // Truncate to p_len - handle edge case where tensor might be empty
+        if feats.size()[1] > 0 && p_len > 0 {
+            let actual_p_len = (p_len as i64).min(feats.size()[1]);
+            feats = feats.i((.., ..actual_p_len, ..));
+        }
 
         // Prepare inference parameters
         let p_len_tensor = Tensor::from(p_len as i64).to(self.device);
@@ -625,6 +642,98 @@ impl RVC {
         }
 
         Ok(output)
+    }
+
+    /// Start real-time streaming with specified configuration
+    ///
+    /// This is a simplified streaming implementation that prepares the RVC
+    /// for streaming mode and creates a buffer for audio processing.
+    /// The actual audio I/O should be handled by external audio systems.
+    pub fn start_stream(&mut self, sample_rate: u32, block_size: usize) -> Result<(), String> {
+        if self.streaming {
+            return Err("Stream already running".to_string());
+        }
+
+        if !self.is_ready() {
+            return Err("RVC not ready - models not loaded".to_string());
+        }
+
+        // Create shared buffer for audio processing
+        let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
+
+        // Create stream handle with basic state management
+        let stream_handle = Arc::new(Mutex::new(StreamHandle {
+            buffer: buffer.clone(),
+            running: true,
+        }));
+
+        // Store stream handle
+        self.stream_handle = Some(stream_handle);
+
+        self.streaming = true;
+        println!(
+            "Real-time streaming initialized with sample_rate: {}, block_size: {}",
+            sample_rate, block_size
+        );
+        Ok(())
+    }
+
+    /// Stop real-time streaming
+    pub fn stop_stream(&mut self) -> Result<(), String> {
+        if !self.streaming {
+            return Err("No stream running".to_string());
+        }
+
+        if let Some(ref stream_handle) = self.stream_handle {
+            let mut handle = stream_handle.lock().unwrap();
+            handle.running = false;
+
+            // Clear buffer
+            handle.buffer.lock().unwrap().clear();
+        }
+
+        self.stream_handle = None;
+        self.streaming = false;
+        println!("Real-time streaming stopped");
+        Ok(())
+    }
+
+    /// Check if streaming is currently active
+    pub fn is_streaming(&self) -> bool {
+        self.streaming
+    }
+
+    /// Get streaming status information
+    pub fn get_stream_info(&self) -> Option<String> {
+        if !self.streaming {
+            return None;
+        }
+
+        if let Some(ref stream_handle) = self.stream_handle {
+            let handle = stream_handle.lock().unwrap();
+            let buffer_size = handle.buffer.lock().unwrap().len();
+            Some(format!(
+                "Streaming active - Buffer size: {} samples",
+                buffer_size
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Process audio data in streaming mode
+    ///
+    /// This method should be called by external audio systems to process
+    /// audio chunks in real-time streaming mode.
+    pub fn process_stream_chunk(&mut self, input_data: &[f32]) -> Result<Vec<f32>, String> {
+        if !self.streaming {
+            return Err("Streaming not active".to_string());
+        }
+
+        // For now, use the simple inference method
+        // In a full implementation, this would use the full infer pipeline
+        // with proper buffering and overlap handling
+        Ok(self.infer_simple(input_data))
     }
 
     /// Legacy simple inference method for backward compatibility
@@ -1323,5 +1432,74 @@ mod tests {
         // Manually computed linear resample at ratio=2
         let expected = vec![0.0, 1.0, 0.0, -1.0];
         assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_streaming_initialization() {
+        let cfg = GUIConfig::default();
+        let rvc = RVC::new(&cfg);
+
+        // Should not be streaming initially
+        assert!(!rvc.is_streaming());
+        assert!(rvc.get_stream_info().is_none());
+    }
+
+    #[test]
+    fn test_start_stream_without_ready() {
+        let mut cfg = GUIConfig::default();
+        let mut rvc = RVC::new(&cfg);
+
+        // Should fail to start stream when not ready
+        let result = rvc.start_stream(16000, 512);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not ready"));
+    }
+
+    #[test]
+    fn test_stop_stream_without_running() {
+        let mut cfg = GUIConfig::default();
+        let mut rvc = RVC::new(&cfg);
+
+        // Should fail to stop stream when not running
+        let result = rvc.stop_stream();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No stream running"));
+    }
+
+    #[test]
+    fn test_streaming_workflow() {
+        let mut cfg = GUIConfig::default();
+        cfg.pth_path = "mock_model.pth".to_string();
+        let mut rvc = RVC::new(&cfg);
+
+        // Force model loaded state for testing
+        rvc.model_loaded = true;
+        rvc.hubert_loaded = true;
+
+        // Should be able to start streaming when ready
+        let result = rvc.start_stream(16000, 512);
+        assert!(result.is_ok());
+        assert!(rvc.is_streaming());
+
+        // Should be able to process audio chunks
+        let input_data = vec![0.5; 512];
+        let processed = rvc.process_stream_chunk(&input_data);
+        assert!(processed.is_ok());
+
+        // Should be able to stop streaming
+        let result = rvc.stop_stream();
+        assert!(result.is_ok());
+        assert!(!rvc.is_streaming());
+    }
+
+    #[test]
+    fn test_process_stream_chunk_without_streaming() {
+        let mut cfg = GUIConfig::default();
+        let mut rvc = RVC::new(&cfg);
+
+        let input_data = vec![0.5; 512];
+        let result = rvc.process_stream_chunk(&input_data);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Streaming not active"));
     }
 }
