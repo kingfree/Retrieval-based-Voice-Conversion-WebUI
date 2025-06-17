@@ -40,9 +40,33 @@ impl RVC {
 
     /// Process an input buffer and return converted audio.
     pub fn infer(&mut self, input: &[f32]) -> Vec<f32> {
-        // TODO: call voice conversion models.
-        let _ = (self.pitch, self.formant); // suppress unused warnings
-        input.to_vec()
+        // The real project will eventually call the trained models here.
+        // For now we provide a very small pitch shifting implementation so
+        // that the realtime pipeline does something audible.  The
+        // `pitch` value stores a semitone offset.  We simply resample the
+        // input using linear interpolation and ignore formant shifting.
+
+        let ratio = (2.0f32).powf(self.pitch / 12.0);
+        if ratio == 1.0 {
+            // Fast path for the common "no-op" case.
+            return input.to_vec();
+        }
+
+        let out_len = ((input.len() as f32) / ratio).round() as usize;
+        let mut output = Vec::with_capacity(out_len);
+        for i in 0..out_len {
+            let pos = i as f32 * ratio;
+            let idx = pos.floor() as usize;
+            let frac = pos - idx as f32;
+            if idx + 1 < input.len() {
+                let a = input[idx];
+                let b = input[idx + 1];
+                output.push(a * (1.0 - frac) + b * frac);
+            } else if idx < input.len() {
+                output.push(input[idx]);
+            }
+        }
+        output
     }
 
     /// Extract F0 from an audio buffer using the specified method and
@@ -121,6 +145,29 @@ mod tests {
         let (coarse, f0) = rvc.get_f0(&input, 0.0, "harvest");
         assert!(f0.iter().all(|&v| v == 0.0));
         assert!(coarse.iter().all(|&c| c == 1));
+    }
+
+    #[test]
+    fn test_infer_identity() {
+        let mut cfg = GUIConfig::default();
+        cfg.pitch = 0.0;
+        let mut rvc = RVC::new(&cfg);
+        let input: Vec<f32> = (0..320).map(|_| 0.5).collect();
+        let output = rvc.infer(&input);
+        assert_eq!(input, output);
+    }
+
+    #[test]
+    fn test_infer_pitch_shift_up() {
+        let mut cfg = GUIConfig::default();
+        cfg.pitch = 12.0; // one octave up
+        let mut rvc = RVC::new(&cfg);
+        let input = vec![0.0, 0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5];
+        let output = rvc.infer(&input);
+
+        // Manually computed linear resample at ratio=2
+        let expected = vec![0.0, 1.0, 0.0, -1.0];
+        assert_eq!(output, expected);
     }
 }
 
