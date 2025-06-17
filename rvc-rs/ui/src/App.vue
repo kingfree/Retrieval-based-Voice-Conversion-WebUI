@@ -246,6 +246,7 @@
 <script setup>
 import { ref, watch, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 const hostapis = ref([]);
 const inputDevices = ref([]);
@@ -279,7 +280,7 @@ const delayTime = ref(0);
 const inferTime = ref(0);
 
 function send(event, value) {
-    invoke("frontend_event", { event, value: value?.toString() });
+    invoke("event_handler", { event, value: value?.toString() });
 }
 
 async function fetchDevices() {
@@ -340,7 +341,26 @@ async function loadConfig() {
     }
 }
 
-onMounted(loadConfig);
+onMounted(async () => {
+    await loadConfig();
+
+    // Listen for backend events
+    await listen("vc_started", () => {
+        console.log("Voice conversion started");
+    });
+
+    await listen("vc_stopped", () => {
+        console.log("Voice conversion stopped");
+    });
+
+    await listen("devices_updated", (event) => {
+        console.log("Devices updated:", event.payload);
+        const deviceInfo = event.payload;
+        hostapis.value = deviceInfo.hostapis;
+        inputDevices.value = deviceInfo.input_devices;
+        outputDevices.value = deviceInfo.output_devices;
+    });
+});
 
 watch(threshold, (v) => send("threshold", v));
 watch(pitch, (v) => send("pitch", v));
@@ -357,53 +377,83 @@ watch(iNoiseReduce, (v) => send("I_noise_reduce", v));
 watch(oNoiseReduce, (v) => send("O_noise_reduce", v));
 watch(usePv, (v) => send("use_pv", v));
 watch(functionMode, (v) => send("function_mode", v));
-watch(hostapi, (v) => {
-    send("sg_hostapi", v);
-    fetchDevices().then(applyDevices);
+watch(hostapi, async (v) => {
+    try {
+        await invoke("event_handler", { event: "sg_hostapi", value: v });
+        await fetchDevices();
+        await applyDevices();
+    } catch (error) {
+        console.error("Failed to update hostapi:", error);
+    }
 });
-watch(inputDevice, (v) => {
-    send("sg_input_device", v);
-    applyDevices();
+watch(inputDevice, async (v) => {
+    try {
+        await invoke("event_handler", { event: "sg_input_device", value: v });
+        await applyDevices();
+    } catch (error) {
+        console.error("Failed to update input device:", error);
+    }
 });
-watch(outputDevice, (v) => {
-    send("sg_output_device", v);
-    applyDevices();
+watch(outputDevice, async (v) => {
+    try {
+        await invoke("event_handler", { event: "sg_output_device", value: v });
+        await applyDevices();
+    } catch (error) {
+        console.error("Failed to update output device:", error);
+    }
 });
 
-function reloadDevices() {
-    send("reload_devices");
-    fetchDevices();
+async function reloadDevices() {
+    try {
+        await invoke("event_handler", { event: "reload_devices", value: null });
+        await fetchDevices();
+    } catch (error) {
+        console.error("Failed to reload devices:", error);
+    }
 }
 
-function startVc() {
-    invoke("set_values", {
-        values: {
-            pth_path: pth,
-            index_path: index,
-            sg_hostapi: hostapi.value,
-            sg_wasapi_exclusive: wasapiExclusive.value,
-            sg_input_device: inputDevice.value,
-            sg_output_device: outputDevice.value,
-            sr_type: srType.value,
-            threhold: threshold.value,
-            pitch: pitch.value,
-            formant: formant.value,
-            index_rate: indexRate.value,
-            rms_mix_rate: rmsMixRate.value,
-            block_time: blockTime.value,
-            crossfade_length: crossfadeLength.value,
-            extra_time: extraTime.value,
-            n_cpu: nCpu.value,
-            use_pv: usePv.value,
-            f0method: f0method.value,
-            I_noise_reduce: iNoiseReduce.value,
-            O_noise_reduce: oNoiseReduce.value,
-        },
-    }).then(() => send("start_vc"));
+async function startVc() {
+    try {
+        // Save configuration first
+        await invoke("set_values", {
+            values: {
+                pth_path: pth,
+                index_path: index,
+                sg_hostapi: hostapi.value,
+                sg_wasapi_exclusive: wasapiExclusive.value,
+                sg_input_device: inputDevice.value,
+                sg_output_device: outputDevice.value,
+                sr_type: srType.value,
+                threhold: threshold.value,
+                pitch: pitch.value,
+                formant: formant.value,
+                index_rate: indexRate.value,
+                rms_mix_rate: rmsMixRate.value,
+                block_time: blockTime.value,
+                crossfade_length: crossfadeLength.value,
+                extra_time: extraTime.value,
+                n_cpu: nCpu.value,
+                use_pv: usePv.value,
+                f0method: f0method.value,
+                I_noise_reduce: iNoiseReduce.value,
+                O_noise_reduce: oNoiseReduce.value,
+            },
+        });
+
+        // Start voice conversion
+        await invoke("event_handler", { event: "start_vc", value: null });
+    } catch (error) {
+        console.error("Failed to start voice conversion:", error);
+        alert("启动语音转换失败: " + error);
+    }
 }
 
-function stopVc() {
-    send("stop_vc");
+async function stopVc() {
+    try {
+        await invoke("event_handler", { event: "stop_vc", value: null });
+    } catch (error) {
+        console.error("Failed to stop voice conversion:", error);
+    }
 }
 </script>
 
