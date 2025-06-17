@@ -21,7 +21,7 @@ pub fn start_vc() -> Result<VC, String> {
         .ok_or_else(|| "devices not set".to_string())?;
 
     let cfg = GUI::load().map_err(|e| e.to_string())?;
-    let rvc = Arc::new(Mutex::new(RVC::from_config(&cfg)));
+    let rvc = Arc::new(Mutex::new(RVC::new(&cfg)));
 
     let host_id = cpal::available_hosts()
         .iter()

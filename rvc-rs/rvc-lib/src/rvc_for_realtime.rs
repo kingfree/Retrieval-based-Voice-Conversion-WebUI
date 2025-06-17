@@ -7,6 +7,10 @@ use crate::{GUIConfig, Harvest};
 pub struct RVC {
     pitch: f32,
     formant: f32,
+    pth_path: String,
+    index_path: String,
+    index_rate: f32,
+    n_cpu: u32,
     f0_min: f32,
     f0_max: f32,
     f0_mel_min: f32,
@@ -15,7 +19,7 @@ pub struct RVC {
 
 impl RVC {
     /// Create a new `RVC` instance using values from the GUI configuration.
-    pub fn from_config(cfg: &GUIConfig) -> Self {
+    pub fn new(cfg: &GUIConfig) -> Self {
         let f0_min = 50.0;
         let f0_max = 1100.0;
         let f0_mel_min = 1127.0 * ((1.0_f32 + f0_min / 700.0).ln());
@@ -23,6 +27,10 @@ impl RVC {
         Self {
             pitch: cfg.pitch,
             formant: cfg.formant,
+            pth_path: cfg.pth_path.clone(),
+            index_path: cfg.index_path.clone(),
+            index_rate: cfg.index_rate,
+            n_cpu: cfg.n_cpu,
             f0_min,
             f0_max,
             f0_mel_min,
@@ -91,7 +99,7 @@ mod tests {
     #[test]
     fn test_get_f0_post_basic() {
         let cfg = GUIConfig::default();
-        let rvc = RVC::from_config(&cfg);
+        let rvc = RVC::new(&cfg);
         let input = vec![0.0, 50.0, 100.0, 1100.0];
         let (coarse, out) = rvc.get_f0_post(&input);
         assert_eq!(out, input);
@@ -108,7 +116,7 @@ mod tests {
     #[test]
     fn test_get_f0_harvest_zero_signal() {
         let cfg = GUIConfig::default();
-        let rvc = RVC::from_config(&cfg);
+        let rvc = RVC::new(&cfg);
         let input = vec![0.0f32; 160];
         let (coarse, f0) = rvc.get_f0(&input, 0.0, "harvest");
         assert!(f0.iter().all(|&v| v == 0.0));
