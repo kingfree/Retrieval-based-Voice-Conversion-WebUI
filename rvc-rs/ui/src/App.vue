@@ -1,6 +1,5 @@
 <template>
     <div class="container">
-        <h1>RVC - GUI</h1>
         <div class="row">
             <section>
                 <h2>加载模型</h2>
@@ -24,6 +23,11 @@
 
             <section>
                 <h2>音频设备</h2>
+                <div>
+                    <button type="button" @click="reloadDevices">
+                        重载设备列表
+                    </button>
+                </div>
                 <div>
                     <label>设备类型:</label>
                     <select v-model="hostapi">
@@ -53,9 +57,6 @@
                     </select>
                 </div>
                 <div>
-                    <button type="button" @click="reloadDevices">
-                        重载设备列表
-                    </button>
                     <label
                         ><input
                             type="radio"
@@ -129,11 +130,41 @@
                 </div>
                 <div>
                     <label>音高算法:</label>
-                    <label><input type="radio" value="pm" v-model="f0method" />pm</label>
-                    <label><input type="radio" value="harvest" v-model="f0method" />harvest</label>
-                    <label><input type="radio" value="crepe" v-model="f0method" />crepe</label>
-                    <label><input type="radio" value="rmvpe" v-model="f0method" />rmvpe</label>
-                    <label><input type="radio" value="fcpe" v-model="f0method" />fcpe</label>
+                    <label
+                        ><input
+                            type="radio"
+                            value="pm"
+                            v-model="f0method"
+                        />pm</label
+                    >
+                    <label
+                        ><input
+                            type="radio"
+                            value="harvest"
+                            v-model="f0method"
+                        />harvest</label
+                    >
+                    <label
+                        ><input
+                            type="radio"
+                            value="crepe"
+                            v-model="f0method"
+                        />crepe</label
+                    >
+                    <label
+                        ><input
+                            type="radio"
+                            value="rmvpe"
+                            v-model="f0method"
+                        />rmvpe</label
+                    >
+                    <label
+                        ><input
+                            type="radio"
+                            value="fcpe"
+                            v-model="f0method"
+                        />fcpe</label
+                    >
                 </div>
             </section>
 
@@ -180,17 +211,32 @@
                     />
                 </div>
                 <div>
-                    <label><input type="checkbox" v-model="iNoiseReduce" /> 输入降噪</label>
-                    <label><input type="checkbox" v-model="oNoiseReduce" /> 输出降噪</label>
-                    <label><input type="checkbox" v-model="usePv" /> 启用相位声码器</label>
+                    <label
+                        ><input type="checkbox" v-model="iNoiseReduce" />
+                        输入降噪</label
+                    >
+                    <label
+                        ><input type="checkbox" v-model="oNoiseReduce" />
+                        输出降噪</label
+                    >
+                    <label
+                        ><input type="checkbox" v-model="usePv" />
+                        启用相位声码器</label
+                    >
                 </div>
             </section>
         </div>
         <div class="actions">
             <button type="button" @click="startVc">开始音频转换</button>
             <button type="button" @click="stopVc">停止音频转换</button>
-            <label><input type="radio" value="im" v-model="functionMode" /> 输入监听</label>
-            <label><input type="radio" value="vc" v-model="functionMode" /> 输出变声</label>
+            <label
+                ><input type="radio" value="im" v-model="functionMode" />
+                输入监听</label
+            >
+            <label
+                ><input type="radio" value="vc" v-model="functionMode" />
+                输出变声</label
+            >
             <span class="info">算法延迟: {{ delayTime }} ms</span>
             <span class="info">推理时间: {{ inferTime }} ms</span>
         </div>
@@ -362,10 +408,15 @@ function stopVc() {
 </script>
 
 <style>
+h2 {
+    padding: 0;
+    margin: 0;
+}
 .container {
     font-family: sans-serif;
     max-width: 800px;
     margin: 0 auto;
+    font-size: small;
 }
 .row {
     display: flex;
@@ -380,11 +431,16 @@ section {
 }
 .slider {
     margin: 0.5rem 0;
+    display: flex;
+    justify-content: stretch;
+}
+.slider label {
+    width: 10em;
+    display: block;
 }
 .actions {
     display: flex;
     gap: 1rem;
-    margin-top: 1rem;
 }
 .info {
     margin-left: 1rem;
