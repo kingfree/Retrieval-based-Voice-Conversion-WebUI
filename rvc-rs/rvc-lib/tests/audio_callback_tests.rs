@@ -499,7 +499,7 @@ fn test_crossfade_edge_cases() {
 fn test_simple_rvc_functionality() {
     let mut cfg = GUIConfig::default();
     cfg.pitch = 5.0; // Some pitch shift
-    let rvc = RVC::new(&cfg);
+    let _rvc = RVC::new(&cfg);
 
     // Test SimpleRVC creation indirectly through RVC methods
     let mut test_rvc = RVC::new(&cfg);

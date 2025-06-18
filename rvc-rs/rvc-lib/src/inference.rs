@@ -85,7 +85,7 @@ pub struct RVCInference {
     f0_estimator: F0Estimator,
     index: Option<FaissIndex>,
     vs: nn::VarStore,
-    model_config: ModelLoaderConfig,
+    _model_config: ModelLoaderConfig,
     model_stats: Option<ModelLoadStats>,
 }
 
@@ -178,7 +178,7 @@ impl RVCInference {
             f0_estimator,
             index,
             vs,
-            model_config,
+            _model_config: model_config,
             model_stats,
         })
     }
@@ -621,7 +621,6 @@ impl BatchInference {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_inference_config_default() {

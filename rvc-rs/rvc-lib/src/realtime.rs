@@ -1,9 +1,13 @@
 use crate::phase_vocoder;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tch::Tensor;
 
 use crate::{GUI, get_device_channels, rvc_for_realtime::RVC};
+
+/// Callback function type for audio data with timing information
+pub type AudioDataCallback = Arc<dyn Fn(&[f32], &[f32], f32, f32) + Send + Sync>;
 
 /// Handle for an active voice conversion stream.
 ///
@@ -13,6 +17,7 @@ pub struct VC {
     _output: cpal::Stream,
     _buffer: Arc<Mutex<Vec<f32>>>,
     _rvc: Arc<Mutex<RVC>>,
+    _audio_callback: Option<AudioDataCallback>,
 }
 
 impl VC {
@@ -42,6 +47,11 @@ impl VC {
 ///
 /// This currently just copies audio from the input device to the output device.
 pub fn start_vc() -> Result<VC, String> {
+    start_vc_with_callback(None)
+}
+
+/// Start realtime voice conversion with an optional audio data callback.
+pub fn start_vc_with_callback(audio_callback: Option<AudioDataCallback>) -> Result<VC, String> {
     let selected =
         crate::devices::selected_devices().ok_or_else(|| "devices not set".to_string())?;
 
@@ -104,13 +114,26 @@ pub fn start_vc() -> Result<VC, String> {
     let fade_in_c = fade_in_window.clone();
     let fade_out_c = fade_out_window.clone();
     let prev_in = prev_chunk.clone();
+    let callback_clone = audio_callback.clone();
     let err_fn = |e| eprintln!("stream error: {e}");
     let input_stream = input
         .build_input_stream(
             &config,
             move |data: &[f32], _| {
+                let processing_start = Instant::now();
+
+                // Store original input data for callback
+                let input_data = data.to_vec();
+
+                // Measure inference time
+                let inference_start = Instant::now();
                 let mut rvc = rvc_in.lock().unwrap();
                 let mut processed = rvc.infer_simple(data).unwrap_or_else(|_| data.to_vec());
+                let inference_time = inference_start.elapsed().as_secs_f32() * 1000.0; // Convert to ms
+                drop(rvc); // Release RVC lock early
+
+                // Measure crossfade processing time
+                let _crossfade_start = Instant::now();
                 let mut last = prev_in.lock().unwrap();
                 if !last.is_empty() {
                     let len = crossfade_frames.min(last.len()).min(processed.len());
@@ -126,6 +149,21 @@ pub fn start_vc() -> Result<VC, String> {
                     }
                 }
                 *last = processed[processed.len().saturating_sub(crossfade_frames)..].to_vec();
+                drop(last); // Release lock
+
+                // Calculate total processing time (algorithm latency)
+                let total_processing_time = processing_start.elapsed().as_secs_f32() * 1000.0;
+
+                // Call the audio data callback with timing information
+                if let Some(ref callback) = callback_clone {
+                    callback(
+                        &input_data,
+                        &processed,
+                        inference_time,
+                        total_processing_time,
+                    );
+                }
+
                 buf_in.lock().unwrap().extend_from_slice(&processed);
             },
             err_fn,
@@ -161,6 +199,7 @@ pub fn start_vc() -> Result<VC, String> {
         _output: output_stream,
         _buffer: buffer,
         _rvc: rvc,
+        _audio_callback: audio_callback,
     })
 }
 

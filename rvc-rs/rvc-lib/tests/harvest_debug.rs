@@ -1,4 +1,4 @@
-use rvc_lib::{Harvest, GUIConfig, RVC};
+use rvc_lib::{GUIConfig, Harvest, RVC};
 use std::fs;
 
 #[test]
@@ -10,8 +10,14 @@ fn test_harvest_detailed_debug() {
     let zero_signal = vec![0.0f32; 1600]; // 100ms of zeros at 16kHz
     let f0_zero = harvest.compute(&zero_signal);
     println!("Zero signal F0 length: {}", f0_zero.len());
-    println!("Zero signal F0 values: {:?}", &f0_zero[..f0_zero.len().min(10)]);
-    assert!(f0_zero.iter().all(|&v| v == 0.0), "Zero signal should produce zero F0");
+    println!(
+        "Zero signal F0 values: {:?}",
+        &f0_zero[..f0_zero.len().min(10)]
+    );
+    assert!(
+        f0_zero.iter().all(|&v| v == 0.0),
+        "Zero signal should produce zero F0"
+    );
 
     // Test 2: Simple 100Hz sine wave
     println!("\n=== Testing 100Hz sine wave ===");
@@ -26,7 +32,10 @@ fn test_harvest_detailed_debug() {
 
     let f0_sine = harvest.compute(&sine_wave);
     println!("Sine wave F0 length: {}", f0_sine.len());
-    println!("Sine wave F0 values (first 10): {:?}", &f0_sine[..f0_sine.len().min(10)]);
+    println!(
+        "Sine wave F0 values (first 10): {:?}",
+        &f0_sine[..f0_sine.len().min(10)]
+    );
 
     // Count non-zero values
     let non_zero_count = f0_sine.iter().filter(|&&v| v > 0.0).count();
@@ -84,17 +93,35 @@ fn test_harvest_with_test_data() {
     println!("Expected F0 length: {}", expected.len());
 
     let harvest = Harvest::new(16000);
-    let f0_harvest: Vec<f32> = harvest.compute(&signal).into_iter().map(|v| v as f32).collect();
+    let f0_harvest: Vec<f32> = harvest
+        .compute(&signal)
+        .into_iter()
+        .map(|v| v as f32)
+        .collect();
 
     println!("Harvest F0 length: {}", f0_harvest.len());
-    println!("First 10 harvest values: {:?}", &f0_harvest[..f0_harvest.len().min(10)]);
-    println!("First 10 expected values: {:?}", &expected[..expected.len().min(10)]);
+    println!(
+        "First 10 harvest values: {:?}",
+        &f0_harvest[..f0_harvest.len().min(10)]
+    );
+    println!(
+        "First 10 expected values: {:?}",
+        &expected[..expected.len().min(10)]
+    );
 
     let harvest_non_zero = f0_harvest.iter().filter(|&&v| v > 0.0).count();
     let expected_non_zero = expected.iter().filter(|&&v| v > 0.0).count();
 
-    println!("Harvest non-zero: {}/{}", harvest_non_zero, f0_harvest.len());
-    println!("Expected non-zero: {}/{}", expected_non_zero, expected.len());
+    println!(
+        "Harvest non-zero: {}/{}",
+        harvest_non_zero,
+        f0_harvest.len()
+    );
+    println!(
+        "Expected non-zero: {}/{}",
+        expected_non_zero,
+        expected.len()
+    );
 
     // Compare RVC's harvest implementation
     let cfg = GUIConfig::default();
@@ -102,8 +129,15 @@ fn test_harvest_with_test_data() {
     let (_coarse, f0_rvc_harvest) = rvc.get_f0(&signal, 0.0, "harvest");
     let rvc_harvest_non_zero = f0_rvc_harvest.iter().filter(|&&v| v > 0.0).count();
 
-    println!("RVC Harvest non-zero: {}/{}", rvc_harvest_non_zero, f0_rvc_harvest.len());
-    println!("First 10 RVC harvest values: {:?}", &f0_rvc_harvest[..f0_rvc_harvest.len().min(10)]);
+    println!(
+        "RVC Harvest non-zero: {}/{}",
+        rvc_harvest_non_zero,
+        f0_rvc_harvest.len()
+    );
+    println!(
+        "First 10 RVC harvest values: {:?}",
+        &f0_rvc_harvest[..f0_rvc_harvest.len().min(10)]
+    );
 }
 
 #[test]
@@ -122,18 +156,23 @@ fn test_harvest_parameter_sensitivity() {
 
     // Test different parameter combinations
     let test_params = [
-        (50.0, 1100.0, 10.0),  // Default
-        (40.0, 1200.0, 10.0),  // Wider range
-        (80.0, 800.0, 10.0),   // Narrower range
-        (50.0, 1100.0, 5.0),   // Shorter frame period
-        (50.0, 1100.0, 20.0),  // Longer frame period
+        (50.0, 1100.0, 10.0), // Default
+        (40.0, 1200.0, 10.0), // Wider range
+        (80.0, 800.0, 10.0),  // Narrower range
+        (50.0, 1100.0, 5.0),  // Shorter frame period
+        (50.0, 1100.0, 20.0), // Longer frame period
     ];
 
     for (i, (f0_floor, f0_ceil, frame_period)) in test_params.iter().enumerate() {
-        println!("\nTest {}: f0_floor={}, f0_ceil={}, frame_period={}",
-                 i+1, f0_floor, f0_ceil, frame_period);
+        println!(
+            "\nTest {}: f0_floor={}, f0_ceil={}, frame_period={}",
+            i + 1,
+            f0_floor,
+            f0_ceil,
+            frame_period
+        );
 
-        let mut harvest = Harvest::new(16000);
+        let harvest = Harvest::new(16000);
         // Note: We can't actually change parameters with current API
         // This would require extending the Harvest struct
 
@@ -143,8 +182,12 @@ fn test_harvest_parameter_sensitivity() {
         if non_zero_count > 0 {
             let detected: Vec<f64> = f0.iter().filter(|&&v| v > 0.0).cloned().collect();
             let avg = detected.iter().sum::<f64>() / detected.len() as f64;
-            println!("  Detected {}/{} frames, avg freq: {:.2} Hz",
-                     non_zero_count, f0.len(), avg);
+            println!(
+                "  Detected {}/{} frames, avg freq: {:.2} Hz",
+                non_zero_count,
+                f0.len(),
+                avg
+            );
         } else {
             println!("  No F0 detected");
         }
@@ -199,6 +242,9 @@ async fn test_harvest_async() {
     if diff_count == 0 {
         println!("Async and sync results are identical");
     } else {
-        println!("Found {} differences between async and sync results", diff_count);
+        println!(
+            "Found {} differences between async and sync results",
+            diff_count
+        );
     }
 }

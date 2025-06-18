@@ -8,7 +8,7 @@
 //! 5. 结果验证和性能测试
 
 use rvc_lib::{
-    audio_utils::{calculate_similarity, create_test_signal, AudioData, AudioStats},
+    audio_utils::{AudioData, AudioStats, calculate_similarity, create_test_signal},
     f0_estimation::F0Method,
     inference::{BatchInference, F0FilterConfig, InferenceConfig, RVCInference},
 };
@@ -44,7 +44,7 @@ impl Default for TestConfig {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 RVC Rust 推理测试套件");
-    println!("=".repeat(60));
+    println!("{}", "=".repeat(60));
 
     let test_config = TestConfig::default();
 
@@ -54,36 +54,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 运行基础推理测试
     println!("\n🔬 基础推理测试");
-    println!("-".repeat(40));
+    println!("{}", "-".repeat(40));
     run_basic_inference_test(&test_config, device)?;
 
     // 运行不同 F0 方法测试
     println!("\n🎼 F0 方法对比测试");
-    println!("-".repeat(40));
+    println!("{}", "-".repeat(40));
     run_f0_method_comparison_test(&test_config, device)?;
 
     // 运行参数调优测试
     println!("\n⚙️  参数调优测试");
-    println!("-".repeat(40));
+    println!("{}", "-".repeat(40));
     run_parameter_tuning_test(&test_config, device)?;
 
     // 运行性能测试
     if test_config.performance_test {
         println!("\n⚡ 性能基准测试");
-        println!("-".repeat(40));
+        println!("{}", "-".repeat(40));
         run_performance_test(&test_config, device)?;
     }
 
     // 运行批量处理测试
     if test_config.batch_test {
         println!("\n📦 批量处理测试");
-        println!("-".repeat(40));
+        println!("{}", "-".repeat(40));
         run_batch_processing_test(&test_config, device)?;
     }
 
     // 运行鲁棒性测试
     println!("\n🛡️  鲁棒性测试");
-    println!("-".repeat(40));
+    println!("{}", "-".repeat(40));
     run_robustness_test(&test_config, device)?;
 
     println!("\n✅ 所有测试完成!");
@@ -330,7 +330,7 @@ fn run_performance_test(
 
     println!("\n📊 不同音频长度的性能表现:");
     println!("时长(s) | 处理时间(ms) | 实时倍数 | 内存使用");
-    println!("-".repeat(50));
+    println!("{}", "-".repeat(50));
 
     for duration in durations {
         let test_audio = create_test_signal(22050.0, duration, test_config.test_frequency);
@@ -602,9 +602,9 @@ fn cleanup_test_files(files: &[PathBuf]) -> Result<(), Box<dyn std::error::Error
 
 /// 打印测试总结
 fn print_test_summary() {
-    println!("\n" + "=".repeat(60));
+    println!("\n{}", "=".repeat(60));
     println!("📋 测试总结");
-    println!("=".repeat(60));
+    println!("{}", "=".repeat(60));
     println!("✅ 基础推理测试: 通过");
     println!("✅ F0 方法对比: 通过");
     println!("✅ 参数调优测试: 通过");
@@ -623,5 +623,7 @@ fn print_test_summary() {
         "   - 项目文档: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI"
     );
     println!("   - 模型下载: https://huggingface.co/lj1995/VoiceConversionWebUI");
-    println!("   - 问题反馈: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/issues");
+    println!(
+        "   - 问题反馈: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/issues"
+    );
 }

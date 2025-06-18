@@ -1,7 +1,7 @@
 import { ref, reactive, onUnmounted } from "vue";
 import { listen } from "@tauri-apps/api/event";
 
-export function useAudioStream(demoMode = false) {
+export function useAudioStream() {
   // Audio data buffers
   const inputAudioData = ref([]);
   const outputAudioData = ref([]);
@@ -12,6 +12,12 @@ export function useAudioStream(demoMode = false) {
   const outputVolume = ref(-60);
   const lastError = ref(null);
   const connectionStatus = ref("disconnected");
+
+  // Performance metrics
+  const inferenceTime = ref(0);
+  const algorithmLatency = ref(0);
+  const bufferLatency = ref(0);
+  const totalLatency = ref(0);
 
   // Audio processing stats
   const stats = reactive({
@@ -27,26 +33,16 @@ export function useAudioStream(demoMode = false) {
   let unlistenInputAudio = null;
   let unlistenOutputAudio = null;
   let unlistenStats = null;
+  let unlistenPerformanceMetrics = null;
 
   // Buffer management
   const maxBufferSize = 8192;
   let inputBuffer = [];
   let outputBuffer = [];
 
-  // Demo mode variables
-  let demoInterval = null;
-  let demoFrame = 0;
-
   const initializeAudioStream = async () => {
     try {
       lastError.value = null;
-
-      if (demoMode) {
-        console.log("Audio stream initialized in demo mode");
-        connectionStatus.value = "connected";
-        return;
-      }
-
       connectionStatus.value = "connecting";
 
       // Listen for input audio data
@@ -108,6 +104,25 @@ export function useAudioStream(demoMode = false) {
         connectionStatus.value = "disconnected";
         clearBuffers();
       });
+
+      // Listen for performance metrics
+      unlistenPerformanceMetrics = await listen(
+        "performance_metrics",
+        (event) => {
+          try {
+            const metrics = event.payload;
+            if (metrics && typeof metrics === "object") {
+              inferenceTime.value = metrics.inference_time_ms || 0;
+              algorithmLatency.value = metrics.algorithm_latency_ms || 0;
+              bufferLatency.value = metrics.buffer_latency_ms || 0;
+              totalLatency.value = algorithmLatency.value + bufferLatency.value;
+            }
+          } catch (error) {
+            console.error("Error processing performance metrics:", error);
+            lastError.value = error.message;
+          }
+        },
+      );
 
       // Listen for error events
       await listen("audio_stream_error", (event) => {
@@ -212,81 +227,6 @@ export function useAudioStream(demoMode = false) {
     outputVolume.value = -60;
   };
 
-  const startDemoStream = () => {
-    if (!demoMode || demoInterval) return;
-
-    try {
-      console.log("Starting demo audio stream");
-      isStreaming.value = true;
-      connectionStatus.value = "connected";
-      demoFrame = 0;
-      lastError.value = null;
-
-      demoInterval = setInterval(() => {
-        try {
-          const sampleCount = 1024;
-          const inputSamples = [];
-          const outputSamples = [];
-
-          for (let i = 0; i < sampleCount; i++) {
-            const t = (demoFrame * sampleCount + i) / 44100.0;
-
-            // Generate input audio with mixed frequencies and noise
-            const inputSignal =
-              0.3 * Math.sin(2 * Math.PI * 440 * t) + // A4 note
-              0.2 * Math.sin(2 * Math.PI * 880 * t) + // A5 note
-              0.1 * Math.sin(2 * Math.PI * 220 * t) + // A3 note
-              0.05 * (Math.random() - 0.5); // White noise
-
-            // Generate output audio (processed/converted)
-            const outputSignal =
-              0.4 * Math.sin(2 * Math.PI * 523.25 * t) + // C5 note
-              0.25 * Math.sin(2 * Math.PI * 659.25 * t) + // E5 note
-              0.15 * Math.sin(2 * Math.PI * 783.99 * t); // G5 note
-
-            inputSamples.push(inputSignal);
-            outputSamples.push(outputSignal);
-          }
-
-          updateInputBuffer(inputSamples);
-          updateOutputBuffer(outputSamples);
-          calculateInputVolume(inputSamples);
-          calculateOutputVolume(outputSamples);
-
-          // Update stats
-          stats.processedSamples += sampleCount;
-          stats.latency = 20 + Math.sin(demoFrame * 0.1) * 10; // Simulate 10-30ms latency
-
-          demoFrame++;
-        } catch (error) {
-          console.error("Error in demo stream generation:", error);
-          lastError.value = error.message;
-          stopDemoStream();
-        }
-      }, 50); // 20 FPS updates
-    } catch (error) {
-      console.error("Failed to start demo stream:", error);
-      lastError.value = error.message;
-      connectionStatus.value = "error";
-    }
-  };
-
-  const stopDemoStream = () => {
-    try {
-      console.log("Stopping demo audio stream");
-      if (demoInterval) {
-        clearInterval(demoInterval);
-        demoInterval = null;
-      }
-      isStreaming.value = false;
-      connectionStatus.value = "disconnected";
-      clearBuffers();
-    } catch (error) {
-      console.error("Error stopping demo stream:", error);
-      lastError.value = error.message;
-    }
-  };
-
   const getInputPeakLevel = () => {
     if (inputBuffer.length === 0) return 0;
     return Math.max(...inputBuffer.map(Math.abs));
@@ -361,21 +301,21 @@ export function useAudioStream(demoMode = false) {
   // Cleanup function
   const cleanup = async () => {
     try {
-      if (demoMode) {
-        stopDemoStream();
-      } else {
-        if (unlistenInputAudio) {
-          await unlistenInputAudio();
-          unlistenInputAudio = null;
-        }
-        if (unlistenOutputAudio) {
-          await unlistenOutputAudio();
-          unlistenOutputAudio = null;
-        }
-        if (unlistenStats) {
-          await unlistenStats();
-          unlistenStats = null;
-        }
+      if (unlistenInputAudio) {
+        await unlistenInputAudio();
+        unlistenInputAudio = null;
+      }
+      if (unlistenOutputAudio) {
+        await unlistenOutputAudio();
+        unlistenOutputAudio = null;
+      }
+      if (unlistenStats) {
+        await unlistenStats();
+        unlistenStats = null;
+      }
+      if (unlistenPerformanceMetrics) {
+        await unlistenPerformanceMetrics();
+        unlistenPerformanceMetrics = null;
       }
       clearBuffers();
     } catch (error) {
@@ -399,6 +339,12 @@ export function useAudioStream(demoMode = false) {
     lastError,
     connectionStatus,
 
+    // Performance metrics
+    inferenceTime,
+    algorithmLatency,
+    bufferLatency,
+    totalLatency,
+
     // Methods
     initializeAudioStream,
     clearBuffers,
@@ -407,9 +353,5 @@ export function useAudioStream(demoMode = false) {
     getInputFrequencyData,
     getOutputFrequencyData,
     cleanup,
-
-    // Demo mode methods
-    startDemoStream,
-    stopDemoStream,
   };
 }

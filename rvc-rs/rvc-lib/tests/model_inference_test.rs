@@ -4,7 +4,7 @@
 //! 与 Python 版本的 generate_test_case.py 生成的参考输出进行对比
 
 use rvc_lib::{
-    AudioData, FaissIndex, GUIConfig, ModelConfig, PyTorchModelLoader, RVC, calculate_similarity,
+    AudioData, FaissIndex, GUIConfig, PyTorchModelLoader, RVC, calculate_similarity,
     load_wav_simple, save_wav_simple,
 };
 use serde_json::Value;

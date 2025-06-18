@@ -12,7 +12,7 @@ struct Case {
 
 #[test]
 fn test_phase_vocoder_case() {
-    use tch::{Device, IndexOp, Kind, Tensor};
+    use tch::Tensor;
 
     let data = fs::read_to_string("tests/data/phase_vocoder_case.json").unwrap();
     let case: Case = serde_json::from_str(&data).unwrap();

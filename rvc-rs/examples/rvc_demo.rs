@@ -11,7 +11,7 @@
 //! - 用户友好的界面
 
 use rvc_lib::{
-    audio_utils::{create_test_signal, AudioData, AudioStats},
+    audio_utils::{AudioData, AudioStats, create_test_signal},
     f0_estimation::F0Method,
     inference::{F0FilterConfig, InferenceConfig, RVCInference},
 };
@@ -131,7 +131,7 @@ fn show_main_menu() -> Result<MenuChoice, Box<dyn std::error::Error>> {
 /// 快速演示
 fn run_quick_demo() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🚀 快速演示模式");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     // 使用默认配置
     let device = if tch::Cuda::is_available() {
@@ -168,7 +168,7 @@ fn run_quick_demo() -> Result<(), Box<dyn std::error::Error>> {
 /// 自定义演示
 fn run_custom_demo() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n⚙️  自定义演示模式");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     // 获取用户配置
     let config = get_user_config()?;
@@ -192,7 +192,7 @@ fn run_custom_demo() -> Result<(), Box<dyn std::error::Error>> {
 /// 性能基准测试
 fn run_performance_benchmark() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n⚡ 性能基准测试");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     let device = if tch::Cuda::is_available() {
         Device::Cuda(0)
@@ -258,7 +258,7 @@ fn run_performance_benchmark() -> Result<(), Box<dyn std::error::Error>> {
 /// 显示帮助信息
 fn show_help() {
     println!("\n❓ 帮助信息");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     println!("📖 RVC (Retrieval-based Voice Conversion) 简介:");
     println!("   RVC 是一种基于检索的语音转换技术，能够将一个人的声音");

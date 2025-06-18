@@ -7,14 +7,10 @@
 //! 4. 性能测试和内存使用
 
 use rvc_lib::{
-    audio_pipeline::{
-        AudioPipeline, AudioPipelineConfig, AudioPostprocessingConfig, AudioPreprocessingConfig,
-        ProcessingProgress, ProgressCallback,
-    },
-    audio_utils::{create_test_signal, save_wav_simple, AudioData},
-    f0_estimation::F0Method,
-    inference::{F0FilterConfig, InferenceConfig, RVCInference},
-    model_loader::{utils, ModelLoader, ModelLoaderConfig},
+    AudioData, AudioPipeline, AudioPipelineConfig, AudioPostprocessingConfig,
+    AudioPreprocessingConfig, F0FilterConfig, F0Method, InferenceConfig, ModelLoader,
+    ModelLoaderConfig, ProcessingProgress, ProgressCallback, RVCInference, create_test_signal,
+    save_wav_simple,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -23,7 +19,7 @@ use tch::Device;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 RVC 完整管道测试");
-    println!("=".repeat(80));
+    println!("{}", "=".repeat(80));
 
     // 检查系统环境
     check_system_environment();
@@ -33,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 运行核心测试
     println!("\n📋 执行核心功能测试");
-    println!("-".repeat(50));
+    println!("{}", "-".repeat(50));
 
     test_model_loading()?;
     test_audio_pipeline().unwrap_or_else(|e| println!("❌ 音频管道测试失败: {}", e));
@@ -42,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 运行性能测试
     println!("\n⚡ 性能测试");
-    println!("-".repeat(50));
+    println!("{}", "-".repeat(50));
     run_performance_tests()?;
 
     // 清理测试数据
@@ -117,7 +113,7 @@ fn create_test_audio_files() -> Result<(), Box<dyn std::error::Error>> {
                 channels: 1,
             }
         } else {
-            create_test_signal(22050.0, duration, frequency)
+            create_test_signal(frequency, duration, 22050)
         };
 
         save_wav_simple(filename, &audio)?;
@@ -158,7 +154,7 @@ fn test_model_loading() -> Result<(), Box<dyn std::error::Error>> {
     // 创建一个空的模型文件用于测试
     std::fs::write(dummy_model_path, b"dummy model data")?;
 
-    match utils::check_model_file(dummy_model_path) {
+    match rvc_lib::model_loader::utils::check_model_file(dummy_model_path) {
         Ok(_) => println!("   ✅ 模型文件检查通过"),
         Err(e) => println!("   ⚠️  模型文件检查警告: {}", e),
     }
@@ -166,7 +162,7 @@ fn test_model_loading() -> Result<(), Box<dyn std::error::Error>> {
     // 测试模型加载（预期失败，因为是假文件）
     println!("   🔄 测试模型加载处理...");
     let vs = tch::nn::VarStore::new(device);
-    match loader.load_pytorch_model(dummy_model_path, &vs) {
+    match loader.load_pytorch_model(dummy_model_path, &mut tch::nn::VarStore::new(device)) {
         Ok(stats) => {
             println!("   ✅ 模型加载成功: {} 参数", stats.total_params);
         }
@@ -205,6 +201,7 @@ fn test_audio_pipeline() -> Result<(), Box<dyn std::error::Error>> {
         model_path: "dummy_model.pth".to_string(),
         index_path: None,
         inference_config: InferenceConfig {
+            speaker_id: 0,
             device: Device::Cpu,
             f0_method: F0Method::PM, // 使用较快的方法
             pitch_shift: 1.2,
@@ -273,13 +270,14 @@ fn test_inference_engine() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧠 测试推理引擎...");
 
     let config = InferenceConfig {
+        speaker_id: 0,
         device: Device::Cpu,
-        f0_method: F0Method::PM,
+        f0_method: F0Method::Harvest,
         pitch_shift: 1.0,
-        index_rate: 0.5,
+        index_rate: 0.75,
         target_sample_rate: 22050,
         batch_size: 1,
-        enable_denoise: false,
+        enable_denoise: true,
         f0_filter: F0FilterConfig::default(),
     };
 
@@ -302,7 +300,7 @@ fn test_inference_engine() -> Result<(), Box<dyn std::error::Error>> {
 
             // 测试音频转换（使用测试音频）
             println!("   🎵 测试音频转换...");
-            let test_audio = create_test_signal(22050.0, 1.0, 440.0);
+            let test_audio = create_test_signal(440.0, 1.0, 22050);
 
             match inference.convert_audio_data(test_audio, None::<&str>) {
                 Ok(result) => {
@@ -336,7 +334,7 @@ fn test_error_handling() -> Result<(), Box<dyn std::error::Error>> {
 
     // 测试不存在的文件
     println!("   📁 测试不存在的文件...");
-    let result = utils::check_model_file("nonexistent_file.pth");
+    let result = rvc_lib::model_loader::utils::check_model_file("nonexistent_file.pth");
     assert!(result.is_err());
     println!("   ✅ 不存在文件错误处理正确");
 
@@ -344,7 +342,7 @@ fn test_error_handling() -> Result<(), Box<dyn std::error::Error>> {
     println!("   📝 测试空文件...");
     let empty_file = "empty_test.pth";
     std::fs::write(empty_file, b"")?;
-    let result = utils::check_model_file(empty_file);
+    let result = rvc_lib::model_loader::utils::check_model_file(empty_file);
     assert!(result.is_err());
     std::fs::remove_file(empty_file)?;
     println!("   ✅ 空文件错误处理正确");
@@ -365,7 +363,7 @@ fn test_error_handling() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
-    let model_config = ModelConfig::default();
+    let model_config = ModelLoaderConfig::default();
     let loader = ModelLoader::new(Device::Cpu);
     let warnings = loader.check_compatibility(&model_config, &config)?;
 
@@ -412,7 +410,7 @@ fn run_performance_tests() -> Result<(), Box<dyn std::error::Error>> {
     let audio_sizes = vec![1.0, 2.0, 5.0]; // 秒
 
     for size in audio_sizes {
-        let audio = create_test_signal(22050.0, size, 440.0);
+        let audio = create_test_signal(440.0, size, 22050);
 
         let start = Instant::now();
         // 简单的音频处理操作
@@ -428,7 +426,7 @@ fn run_performance_tests() -> Result<(), Box<dyn std::error::Error>> {
 
     // 内存使用估算
     println!("   💾 内存使用估算...");
-    let model_config = ModelConfig::default();
+    let model_config = ModelLoaderConfig::default();
     let loader = ModelLoader::new(device);
     let estimated_memory = estimate_memory_usage(&model_config);
     println!("   📊 预估内存使用: {:.1}MB", estimated_memory);
@@ -488,9 +486,9 @@ fn cleanup_test_data() -> Result<(), Box<dyn std::error::Error>> {
 
 /// 打印测试总结
 fn print_test_summary() {
-    println!("\n" + "=".repeat(80));
+    println!("\n{}", "=".repeat(80));
     println!("📋 测试总结");
-    println!("=".repeat(80));
+    println!("{}", "=".repeat(80));
 
     println!("✅ 核心功能测试:");
     println!("   ✓ 模型加载和验证");

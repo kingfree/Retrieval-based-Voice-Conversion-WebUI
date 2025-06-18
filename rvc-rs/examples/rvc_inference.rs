@@ -4,7 +4,7 @@
 //! 展示了完整的推理流程，包括模型加载、特征提取、F0 估计和音频生成。
 
 use rvc_lib::{
-    audio_utils::{create_test_signal, AudioData},
+    audio_utils::{AudioData, create_test_signal},
     f0_estimation::F0Method,
     inference::{BatchInference, F0FilterConfig, InferenceConfig, RVCInference},
 };
@@ -86,9 +86,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // 5. 示例 1: 单文件推理
-    println!("\n" + "=".repeat(50).as_str());
+    println!("\n{}", "=".repeat(50));
     println!("📝 示例 1: 单文件语音转换");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     let input_audio_path = PathBuf::from("test.wav");
     let output_audio_path = PathBuf::from("output_converted.wav");
@@ -131,9 +131,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 6. 示例 2: 批量推理
-    println!("\n" + "=".repeat(50).as_str());
+    println!("\n{}", "=".repeat(50));
     println!("📝 示例 2: 批量语音转换");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
 
     let batch_inference = BatchInference::new(inference_engine);
     let input_files = vec![
@@ -189,9 +189,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 7. 性能提示
-    println!("\n" + "=".repeat(50).as_str());
+    println!("\n{}", "=".repeat(50));
     println!("💡 性能优化提示");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
     println!("1. 使用 GPU 加速 (如果可用):");
     println!("   config.device = Device::Cuda(0);");
     println!();
@@ -209,9 +209,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - index_rate = 0.5-0.8: 推荐范围");
 
     // 8. 故障排除
-    println!("\n" + "=".repeat(50).as_str());
+    println!("\n{}", "=".repeat(50));
     println!("🔧 常见问题排除");
-    println!("=".repeat(50));
+    println!("{}", "=".repeat(50));
     println!("1. 模型加载失败:");
     println!("   - 检查模型文件路径是否正确");
     println!("   - 确保模型文件格式兼容");
@@ -232,7 +232,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - 降低音频采样率");
 
     println!("\n🎉 示例运行完成!");
-    println!("更多信息请参考项目文档: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI");
+    println!(
+        "更多信息请参考项目文档: https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI"
+    );
 
     Ok(())
 }

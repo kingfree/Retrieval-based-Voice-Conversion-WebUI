@@ -11,7 +11,7 @@ pub use devices::{
 };
 
 mod realtime;
-pub use realtime::{VC, start_vc};
+pub use realtime::{AudioDataCallback, VC, start_vc, start_vc_with_callback};
 
 mod rvc_for_realtime;
 pub use rvc_for_realtime::{AudioCallback, AudioCallbackConfig, RVC, SimpleRVC, apply_crossfade};

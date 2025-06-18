@@ -109,8 +109,8 @@ pub type ProgressCallback = Box<dyn Fn(ProcessingProgress) + Send + Sync>;
 /// 音频处理管道
 pub struct AudioPipeline {
     config: AudioPipelineConfig,
-    model_config: ModelLoaderConfig,
-    vs: nn::VarStore,
+    _model_config: ModelLoaderConfig,
+    _vs: nn::VarStore,
     hubert: HuBERT,
     generator: NSFHiFiGANGenerator,
     f0_estimator: F0Estimator,
@@ -171,8 +171,8 @@ impl AudioPipeline {
 
         Ok(Self {
             config,
-            model_config,
-            vs,
+            _model_config: model_config,
+            _vs: vs,
             hubert,
             generator,
             f0_estimator,
@@ -744,7 +744,7 @@ pub mod utils {
         input_files: &[String],
         output_dir: &str,
         model_path: &str,
-        progress_callback: Option<ProgressCallback>,
+        _progress_callback: Option<ProgressCallback>,
     ) -> Result<Vec<String>> {
         let mut output_files = Vec::new();
 
