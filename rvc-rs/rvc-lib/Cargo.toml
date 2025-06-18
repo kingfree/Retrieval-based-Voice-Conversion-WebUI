@@ -27,3 +27,15 @@ chrono = { version = "0.4", features = ["serde"] }
 default = []
 hound = ["dep:hound"]
 faiss = []
+
+[[example]]
+name = "rvc_inference"
+path = "examples/rvc_inference.rs"
+
+[[example]]
+name = "test_inference"
+path = "examples/test_inference.rs"
+
+[[example]]
+name = "rvc_demo"
+path = "examples/rvc_demo.rs"

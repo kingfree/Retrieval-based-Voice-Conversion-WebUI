@@ -3,10 +3,8 @@
 //! 提供音频文件加载、保存、处理等功能
 //! 支持WAV格式的音频文件读写
 
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 use std::path::Path;
-use tch::{Device, Kind, Tensor};
+use tch::{Device, Tensor};
 
 /// 音频数据结构
 #[derive(Debug, Clone)]

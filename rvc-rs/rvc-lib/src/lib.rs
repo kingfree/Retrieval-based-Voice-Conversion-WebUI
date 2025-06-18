@@ -28,6 +28,25 @@ pub use pytorch_loader::{ModelConfig, ModelSummary, PyTorchModelLoader, RVCVersi
 mod faiss_index;
 pub use faiss_index::{FaissIndex, IndexInfo, IndexType, MetricType, SearchResult};
 
+mod hubert;
+pub use hubert::{AudioPreprocessor, HuBERT, HuBERTConfig, HuBERTFactory, HuBERTOutput};
+
+mod f0_estimation;
+pub use f0_estimation::{
+    F0Config, F0Estimator, F0Method, F0Processor, F0Result, WindowType as F0WindowType,
+};
+
+mod generator;
+pub use generator::{
+    ConditionalGenerator, GeneratorConfig, GeneratorFactory, InferenceHelper, MRF, NSF,
+    NSFHiFiGANGenerator, ResidualBlock, UpsampleBlock,
+};
+
+mod inference;
+pub use inference::{
+    BatchInference, F0FilterConfig, InferenceConfig, InferenceStats, RVCInference,
+};
+
 use std::f64::consts::PI;
 use tch::{IndexOp, Kind, Tensor};
 
