@@ -29,6 +29,48 @@
             </div>
         </header>
 
+        <!-- Notification Area -->
+        <div v-if="errorMessage || successMessage" class="notification-area">
+            <div
+                v-if="errorMessage"
+                class="notification error"
+                @click="clearError"
+            >
+                <svg
+                    class="notification-icon"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                >
+                    <path
+                        d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A1.5,1.5 0 0,1 10.5,15.5A1.5,1.5 0 0,1 12,14A1.5,1.5 0 0,1 13.5,15.5A1.5,1.5 0 0,1 12,17M12,5.5A3.5,3.5 0 0,1 15.5,9C15.5,10.38 14.75,11.44 13.5,12.28C13.17,12.53 13,12.69 13,13.5H11C11,12.06 11.83,11.21 12.83,10.35C13.28,9.96 13.5,9.5 13.5,9A1.5,1.5 0 0,0 12,7.5A1.5,1.5 0 0,0 10.5,9H9A3,3 0 0,1 12,6A3,3 0 0,1 15,9C15,10.88 13.37,12 12,12.63V13.5H10V12.63C8.63,12 7,10.88 7,9A5,5 0 0,1 12,4A5,5 0 0,1 17,9C17,11.12 15.12,12.75 13.5,13.37V14.5H10.5V13.37C8.88,12.75 7,11.12 7,9A3,3 0 0,1 10,6A3,3 0 0,1 13,9C13,9.5 12.72,9.96 12.27,10.35C11.27,11.21 10.44,12.06 10.44,13.5H12.56C12.56,12.69 12.73,12.53 13.06,12.28C14.31,11.44 15.06,10.38 15.06,9A3.56,3.56 0 0,0 11.5,5.44A3.56,3.56 0 0,0 7.94,9A1.06,1.06 0 0,0 9,10.06C9.59,10.06 10.06,9.59 10.06,9A2,2 0 0,1 12.06,7A2,2 0 0,1 14.06,9C14.06,9.89 13.54,10.64 12.81,11.2C11.77,12 10.94,12.94 10.94,14.5H13.06C13.06,13.66 13.4,13.12 14.06,12.59C15.19,11.73 16.06,10.5 16.06,9A4.06,4.06 0 0,0 12,4.94A4.06,4.06 0 0,0 7.94,9H9.5A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9C14.5,10.25 13.75,11.31 12.5,12.15C12.17,12.4 12,12.56 12,13.37V14.5H10V13.37C10,12.56 10.17,12.4 10.5,12.15C11.75,11.31 12.5,10.25 12.5,9A2.5,2.5 0 0,0 10,6.5A2.5,2.5 0 0,0 7.5,9H9A1,1 0 0,1 10,8A1,1 0 0,1 11,9A1,1 0 0,1 10,10A1,1 0 0,1 9,9"
+                    />
+                </svg>
+                <span class="notification-text">{{ errorMessage }}</span>
+                <button class="notification-close" @click.stop="clearError">
+                    ×
+                </button>
+            </div>
+            <div
+                v-if="successMessage"
+                class="notification success"
+                @click="clearSuccess"
+            >
+                <svg
+                    class="notification-icon"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                >
+                    <path
+                        d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"
+                    />
+                </svg>
+                <span class="notification-text">{{ successMessage }}</span>
+                <button class="notification-close" @click.stop="clearSuccess">
+                    ×
+                </button>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <main class="main-content">
             <!-- Top Row: Controls + Quick Settings -->
@@ -60,11 +102,19 @@
 
                     <div class="mode-selector">
                         <label class="mode-option">
-                            <input type="radio" value="im" v-model="functionMode" />
+                            <input
+                                type="radio"
+                                value="im"
+                                v-model="functionMode"
+                            />
                             <span>输入监听</span>
                         </label>
                         <label class="mode-option">
-                            <input type="radio" value="vc" v-model="functionMode" />
+                            <input
+                                type="radio"
+                                value="vc"
+                                v-model="functionMode"
+                            />
                             <span>输出变声</span>
                         </label>
                     </div>
@@ -139,7 +189,9 @@
                                 accent-color="#7ed8d1"
                                 theme="light"
                                 ref="outputVisualizer"
-                                @level-change="(level) => (outputVolume = level)"
+                                @level-change="
+                                    (level) => (outputVolume = level)
+                                "
                                 @error="handleVisualizationError"
                             />
                         </div>
@@ -195,7 +247,9 @@
                         <input
                             type="file"
                             accept=".pth"
-                            @change="(e) => (pth = e.target.files[0]?.name || '')"
+                            @change="
+                                (e) => (pth = e.target.files[0]?.name || '')
+                            "
                             class="file-input"
                         />
                         <span v-if="pth" class="file-name">{{ pth }}</span>
@@ -206,7 +260,9 @@
                         <input
                             type="file"
                             accept=".index"
-                            @change="(e) => (index = e.target.files[0]?.name || '')"
+                            @change="
+                                (e) => (index = e.target.files[0]?.name || '')
+                            "
                             class="file-input"
                         />
                         <span v-if="index" class="file-name">{{ index }}</span>
@@ -217,7 +273,11 @@
                 <div v-show="activeTab === 'audio'" class="settings-section">
                     <h3>音频设备</h3>
                     <div class="form-group">
-                        <button type="button" @click="reloadDevices" class="reload-btn">
+                        <button
+                            type="button"
+                            @click="reloadDevices"
+                            class="reload-btn"
+                        >
                             重载设备列表
                         </button>
                     </div>
@@ -238,7 +298,11 @@
                     <div class="form-group">
                         <label>输入设备</label>
                         <select v-model="inputDevice" class="select-input">
-                            <option v-for="d in inputDevices" :key="d" :value="d">
+                            <option
+                                v-for="d in inputDevices"
+                                :key="d"
+                                :value="d"
+                            >
                                 {{ d }}
                             </option>
                         </select>
@@ -247,7 +311,11 @@
                     <div class="form-group">
                         <label>输出设备</label>
                         <select v-model="outputDevice" class="select-input">
-                            <option v-for="d in outputDevices" :key="d" :value="d">
+                            <option
+                                v-for="d in outputDevices"
+                                :key="d"
+                                :value="d"
+                            >
                                 {{ d }}
                             </option>
                         </select>
@@ -257,20 +325,33 @@
                         <label>采样率设置</label>
                         <div class="radio-group">
                             <label class="radio-label">
-                                <input type="radio" value="sr_model" v-model="srType" />
+                                <input
+                                    type="radio"
+                                    value="sr_model"
+                                    v-model="srType"
+                                />
                                 使用模型采样率
                             </label>
                             <label class="radio-label">
-                                <input type="radio" value="sr_device" v-model="srType" />
+                                <input
+                                    type="radio"
+                                    value="sr_device"
+                                    v-model="srType"
+                                />
                                 使用设备采样率
                             </label>
                         </div>
-                        <div class="info-text">当前采样率: {{ sampleRate }} Hz</div>
+                        <div class="info-text">
+                            当前采样率: {{ sampleRate }} Hz
+                        </div>
                     </div>
                 </div>
 
                 <!-- Processing Settings -->
-                <div v-show="activeTab === 'processing'" class="settings-section">
+                <div
+                    v-show="activeTab === 'processing'"
+                    class="settings-section"
+                >
                     <h3>处理参数</h3>
 
                     <div class="form-group">
@@ -299,7 +380,9 @@
                                 v-model.number="indexRate"
                                 class="slider"
                             />
-                            <span class="value">{{ indexRate.toFixed(2) }}</span>
+                            <span class="value">{{
+                                indexRate.toFixed(2)
+                            }}</span>
                         </div>
                     </div>
 
@@ -314,15 +397,25 @@
                                 v-model.number="rmsMixRate"
                                 class="slider"
                             />
-                            <span class="value">{{ rmsMixRate.toFixed(2) }}</span>
+                            <span class="value">{{
+                                rmsMixRate.toFixed(2)
+                            }}</span>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label>音高算法</label>
                         <div class="radio-group">
-                            <label v-for="method in f0Methods" :key="method" class="radio-label">
-                                <input type="radio" :value="method" v-model="f0method" />
+                            <label
+                                v-for="method in f0Methods"
+                                :key="method"
+                                class="radio-label"
+                            >
+                                <input
+                                    type="radio"
+                                    :value="method"
+                                    v-model="f0method"
+                                />
                                 {{ method }}
                             </label>
                         </div>
@@ -330,7 +423,10 @@
                 </div>
 
                 <!-- Performance Settings -->
-                <div v-show="activeTab === 'performance'" class="settings-section">
+                <div
+                    v-show="activeTab === 'performance'"
+                    class="settings-section"
+                >
                     <h3>性能设置</h3>
 
                     <div class="form-group">
@@ -344,7 +440,9 @@
                                 v-model.number="blockTime"
                                 class="slider"
                             />
-                            <span class="value">{{ blockTime.toFixed(2) }}s</span>
+                            <span class="value"
+                                >{{ blockTime.toFixed(2) }}s</span
+                            >
                         </div>
                     </div>
 
@@ -359,7 +457,9 @@
                                 v-model.number="crossfadeLength"
                                 class="slider"
                             />
-                            <span class="value">{{ crossfadeLength.toFixed(2) }}s</span>
+                            <span class="value"
+                                >{{ crossfadeLength.toFixed(2) }}s</span
+                            >
                         </div>
                     </div>
 
@@ -389,7 +489,9 @@
                                 v-model.number="extraTime"
                                 class="slider"
                             />
-                            <span class="value">{{ extraTime.toFixed(2) }}s</span>
+                            <span class="value"
+                                >{{ extraTime.toFixed(2) }}s</span
+                            >
                         </div>
                     </div>
 
@@ -445,8 +547,8 @@ const f0Methods = ["pm", "harvest", "crepe", "rmvpe", "fcpe"];
 const hostapis = ref([]);
 const inputDevices = ref([]);
 const outputDevices = ref([]);
-const pth = ref("");
-const index = ref("");
+const pth = ref("assets/weights/kikiV1.pth");
+const index = ref("logs/kikiV1.index");
 const hostapi = ref("");
 const wasapiExclusive = ref(false);
 const inputDevice = ref("");
@@ -457,22 +559,26 @@ const srType = ref("sr_model");
 const threshold = ref(-60);
 const pitch = ref(0);
 const formant = ref(0.0);
-const indexRate = ref(0.0);
-const rmsMixRate = ref(0.0);
+const indexRate = ref(0.75);
+const rmsMixRate = ref(0.25);
 const f0method = ref("fcpe");
 
 // Performance Parameters
 const blockTime = ref(0.25);
 const crossfadeLength = ref(0.05);
-const nCpu = ref(1);
+const nCpu = ref(2);
 const extraTime = ref(2.5);
-const iNoiseReduce = ref(false);
-const oNoiseReduce = ref(false);
+const iNoiseReduce = ref(true);
+const oNoiseReduce = ref(true);
 const usePv = ref(false);
 const functionMode = ref("vc");
 const sampleRate = ref(0);
 const delayTime = ref(0);
 const inferTime = ref(0);
+
+// Error and success messages
+const errorMessage = ref("");
+const successMessage = ref("");
 
 // Audio stream composable
 const {
@@ -556,34 +662,40 @@ async function loadConfig() {
     try {
         const config = await invoke("load_config");
 
-        // Apply loaded configuration
-        pth.value = config.pth || "";
-        index.value = config.index || "";
+        // Apply loaded configuration with better defaults
+        pth.value = config.pth || "assets/weights/kikiV1.pth";
+        index.value = config.index || "logs/kikiV1.index";
         hostapi.value = config.hostapi || "";
         wasapiExclusive.value = config.wasapiExclusive || false;
         inputDevice.value = config.inputDevice || "";
         outputDevice.value = config.outputDevice || "";
         srType.value = config.srType || "sr_model";
 
-        // Processing parameters
+        // Processing parameters with better defaults
         threshold.value = config.threshold ?? -60;
         pitch.value = config.pitch ?? 0;
         formant.value = config.formant ?? 0.0;
-        indexRate.value = config.indexRate ?? 0.0;
-        rmsMixRate.value = config.rmsMixRate ?? 0.0;
+        indexRate.value = config.indexRate ?? 0.75;
+        rmsMixRate.value = config.rmsMixRate ?? 0.25;
         f0method.value = config.f0method || "fcpe";
 
-        // Performance parameters
+        // Performance parameters with better defaults
         blockTime.value = config.blockTime ?? 0.25;
         crossfadeLength.value = config.crossfadeLength ?? 0.05;
-        nCpu.value = config.nCpu ?? 1;
+        nCpu.value = config.nCpu ?? 2;
         extraTime.value = config.extraTime ?? 2.5;
-        iNoiseReduce.value = config.iNoiseReduce ?? false;
-        oNoiseReduce.value = config.oNoiseReduce ?? false;
+        iNoiseReduce.value = config.iNoiseReduce ?? true;
+        oNoiseReduce.value = config.oNoiseReduce ?? true;
         usePv.value = config.usePv ?? false;
         functionMode.value = config.functionMode || "vc";
+
+        console.log("✅ Configuration loaded successfully");
+        showSuccess("配置加载成功");
     } catch (e) {
-        console.error("failed to load config", e);
+        console.error("❌ Failed to load config:", e);
+        showError(`配置加载失败: ${e.message || e}`);
+        // Still apply defaults even if loading fails
+        console.log("📋 Applying default configuration...");
     }
 }
 
@@ -596,6 +708,21 @@ async function startVc() {
     if (!canStartVc.value) return;
 
     try {
+        console.log("🚀 Starting voice conversion...");
+        console.log("📋 Configuration:", {
+            pth: pth.value,
+            index: index.value,
+            hostapi: hostapi.value,
+            inputDevice: inputDevice.value,
+            outputDevice: outputDevice.value,
+            f0method: f0method.value,
+            pitch: pitch.value,
+            indexRate: indexRate.value,
+        });
+
+        // Save current configuration before starting
+        await saveConfig();
+
         await invoke("start_vc", {
             pth: pth.value,
             index: index.value,
@@ -621,17 +748,59 @@ async function startVc() {
         });
 
         await initializeAudioStream();
+        console.log("✅ Voice conversion started successfully");
+        showSuccess("语音转换启动成功");
     } catch (e) {
-        console.error("failed to start vc", e);
+        console.error("❌ Failed to start voice conversion:", e);
+        showError(`启动语音转换失败: ${e.message || e}`);
     }
 }
 
 async function stopVc() {
     try {
+        console.log("🛑 Stopping voice conversion...");
         await invoke("stop_vc");
         clearBuffers();
+        console.log("✅ Voice conversion stopped successfully");
+        showSuccess("语音转换已停止");
     } catch (e) {
-        console.error("failed to stop vc", e);
+        console.error("❌ Failed to stop voice conversion:", e);
+        showError(`停止语音转换失败: ${e.message || e}`);
+    }
+}
+
+// Save configuration function
+async function saveConfig() {
+    try {
+        const config = {
+            pth: pth.value,
+            index: index.value,
+            hostapi: hostapi.value,
+            wasapiExclusive: wasapiExclusive.value,
+            inputDevice: inputDevice.value,
+            outputDevice: outputDevice.value,
+            srType: srType.value,
+            threshold: threshold.value,
+            pitch: pitch.value,
+            formant: formant.value,
+            indexRate: indexRate.value,
+            rmsMixRate: rmsMixRate.value,
+            f0method: f0method.value,
+            blockTime: blockTime.value,
+            crossfadeLength: crossfadeLength.value,
+            nCpu: nCpu.value,
+            extraTime: extraTime.value,
+            iNoiseReduce: iNoiseReduce.value,
+            oNoiseReduce: oNoiseReduce.value,
+            usePv: usePv.value,
+            functionMode: functionMode.value,
+        };
+
+        await invoke("save_config", { config });
+        console.log("💾 Configuration saved successfully");
+    } catch (e) {
+        console.error("❌ Failed to save config:", e);
+        showError(`配置保存失败: ${e.message || e}`);
     }
 }
 
@@ -659,12 +828,84 @@ function handleVisualizationError(error) {
     console.error("Visualization error:", error);
 }
 
+function clearError() {
+    lastError.value = null;
+    errorMessage.value = "";
+}
+
+function clearSuccess() {
+    successMessage.value = "";
+}
+
+function showError(message) {
+    errorMessage.value = message;
+    console.error("❌", message);
+    // Auto-clear after 10 seconds
+    setTimeout(() => {
+        if (errorMessage.value === message) {
+            clearError();
+        }
+    }, 10000);
+}
+
+function showSuccess(message) {
+    successMessage.value = message;
+    console.log("✅", message);
+    // Auto-clear after 3 seconds
+    setTimeout(() => {
+        if (successMessage.value === message) {
+            clearSuccess();
+        }
+    }, 3000);
+}
+
 // Watchers
 watch([hostapi, inputDevice, outputDevice], async () => {
     if (hostapi.value && inputDevice.value && outputDevice.value) {
         await applyDevices();
     }
 });
+
+// Auto-save configuration when parameters change
+watch(
+    [
+        pth,
+        index,
+        hostapi,
+        wasapiExclusive,
+        inputDevice,
+        outputDevice,
+        srType,
+        threshold,
+        pitch,
+        formant,
+        indexRate,
+        rmsMixRate,
+        f0method,
+        blockTime,
+        crossfadeLength,
+        nCpu,
+        extraTime,
+        iNoiseReduce,
+        oNoiseReduce,
+        usePv,
+        functionMode,
+    ],
+    () => {
+        // Debounce auto-save to avoid excessive saves
+        clearTimeout(window.configSaveTimeout);
+        window.configSaveTimeout = setTimeout(async () => {
+            try {
+                await saveConfig();
+                console.log("🔄 Configuration auto-saved");
+            } catch (e) {
+                console.error("❌ Auto-save failed:", e);
+                // Don't show error notification for auto-save failures to avoid spam
+            }
+        }, 1000); // Save after 1 second of no changes
+    },
+    { deep: true },
+);
 
 // Lifecycle
 onMounted(async () => {
@@ -693,6 +934,56 @@ onMounted(async () => {
         bufferLatency.value = buffer_latency;
         totalLatency.value = total_latency;
     });
+
+    // Listen for RVC status events
+    const unlistenStatus = await listen("rvc_status", (event) => {
+        const { status, message } = event.payload;
+        console.log(`🔄 RVC Status: ${status} - ${message}`);
+
+        if (status === "started") {
+            showSuccess(message);
+            connectionStatus.value = "connected";
+        } else if (status === "stopped") {
+            showSuccess(message);
+            connectionStatus.value = "disconnected";
+        }
+    });
+
+    // Listen for RVC error events
+    const unlistenError = await listen("rvc_error", (event) => {
+        const { error, type, file, timestamp } = event.payload;
+        console.error(`❌ RVC Error [${type}]:`, error);
+
+        let userMessage = error;
+        if (type === "file_not_found") {
+            userMessage = `文件未找到: ${file}`;
+        } else if (type === "already_running") {
+            userMessage = "语音转换已在运行中";
+        }
+
+        showError(userMessage);
+        connectionStatus.value = "error";
+        lastError.value = error;
+    });
+
+    // Store unlisten functions for cleanup
+    window.rvcUnlisteners = {
+        audio: unlistenAudio,
+        performance: unlistenPerformance,
+        status: unlistenStatus,
+        error: unlistenError,
+    };
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+    if (window.rvcUnlisteners) {
+        Object.values(window.rvcUnlisteners).forEach((unlisten) => {
+            if (typeof unlisten === "function") {
+                unlisten();
+            }
+        });
+    }
 });
 </script>
 
@@ -701,7 +992,8 @@ onMounted(async () => {
 .app-container {
     height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1288,7 +1580,8 @@ onMounted(async () => {
 }
 
 @keyframes pulse {
-    0%, 100% {
+    0%,
+    100% {
         opacity: 1;
     }
     50% {
@@ -1297,7 +1590,8 @@ onMounted(async () => {
 }
 
 @keyframes shake {
-    0%, 100% {
+    0%,
+    100% {
         transform: translateX(0);
     }
     25% {
@@ -1432,6 +1726,109 @@ onMounted(async () => {
     .info-text {
         background: rgba(113, 128, 150, 0.2);
         color: #a0aec0;
+    }
+}
+
+/* Notification Area */
+.notification-area {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 400px;
+}
+
+.notification {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    animation: slideIn 0.3s ease;
+}
+
+.notification:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.notification.error {
+    background: rgba(245, 101, 101, 0.95);
+    color: white;
+    border-left: 4px solid #e53e3e;
+}
+
+.notification.success {
+    background: rgba(72, 187, 120, 0.95);
+    color: white;
+    border-left: 4px solid #38a169;
+}
+
+.notification-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.notification-text {
+    flex: 1;
+    font-weight: 500;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.notification-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .notification-area {
+        top: 60px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+
+    .notification {
+        padding: 0.6rem 0.8rem;
+    }
+
+    .notification-text {
+        font-size: 0.85rem;
     }
 }
 </style>

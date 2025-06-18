@@ -1,5 +1,6 @@
-use log::info;
-use rvc_lib::{start_vc_with_callback, AudioDataCallback, DeviceInfo, GUIConfig, GUI};
+use chrono;
+use log::{error, info, warn};
+use rvc_lib::{start_vc, start_vc_with_callback, AudioDataCallback, DeviceInfo, GUIConfig, GUI};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -76,7 +77,7 @@ async fn event_handler(
     event: String,
     value: Option<String>,
 ) -> Result<(), String> {
-    info!("Event: {} = {:?}", event, value);
+    info!("📨 Event received: {} = {:?}", event, value);
 
     let mut config = state.inner().config.lock().unwrap();
     let mut is_running = state.inner().is_running.lock().unwrap();
@@ -461,8 +462,273 @@ fn set_values(values: GUIConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn save_config(config: serde_json::Value) -> Result<(), String> {
+    use std::fs;
+    use std::path::Path;
+
+    // Create config directory if it doesn't exist
+    let config_dir = Path::new("config");
+    if !config_dir.exists() {
+        fs::create_dir_all(config_dir)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+
+    // Save configuration to file
+    let config_path = config_dir.join("frontend_config.json");
+    let config_str = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    fs::write(&config_path, config_str)
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
+
+    info!("💾 Configuration saved to {:?}", config_path);
+    Ok(())
+}
+
+#[tauri::command]
+fn load_config() -> Result<serde_json::Value, String> {
+    use std::fs;
+    use std::path::Path;
+
+    let config_path = Path::new("config/frontend_config.json");
+
+    if !config_path.exists() {
+        info!("📋 No saved config found, using defaults");
+        // Return default configuration
+        return Ok(serde_json::json!({
+            "pth": "assets/weights/kikiV1.pth",
+            "index": "logs/kikiV1.index",
+            "hostapi": "",
+            "wasapiExclusive": false,
+            "inputDevice": "",
+            "outputDevice": "",
+            "srType": "sr_model",
+            "threshold": -60,
+            "pitch": 0,
+            "formant": 0.0,
+            "indexRate": 0.75,
+            "rmsMixRate": 0.25,
+            "f0method": "fcpe",
+            "blockTime": 0.25,
+            "crossfadeLength": 0.05,
+            "nCpu": 2,
+            "extraTime": 2.5,
+            "iNoiseReduce": true,
+            "oNoiseReduce": true,
+            "usePv": false,
+            "functionMode": "vc"
+        }));
+    }
+
+    let config_str = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config file: {}", e))?;
+
+    let config: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse config file: {}", e))?;
+
+    info!("✅ Configuration loaded from {:?}", config_path);
+    Ok(config)
+}
+
+#[tauri::command]
+async fn start_vc(
+    app: AppHandle,
+    state: State<'_, VcState>,
+    pth: String,
+    index: String,
+    hostapi: String,
+    input_device: String,
+    output_device: String,
+    wasapi_exclusive: bool,
+    sr_type: String,
+    threshold: f64,
+    pitch: f64,
+    formant: f64,
+    index_rate: f64,
+    rms_mix_rate: f64,
+    f0method: String,
+    block_time: f64,
+    crossfade_length: f64,
+    n_cpu: i32,
+    extra_time: f64,
+    i_noise_reduce: bool,
+    o_noise_reduce: bool,
+    use_pv: bool,
+    function_mode: String,
+) -> Result<(), String> {
+    info!("🚀 Starting voice conversion with parameters:");
+    info!("  Model: {}", pth);
+    info!("  Index: {}", index);
+    info!("  F0 Method: {}", f0method);
+    info!("  Pitch: {}", pitch);
+    info!("  Index Rate: {}", index_rate);
+
+    // Validate model file exists
+    if !std::path::Path::new(&pth).exists() {
+        let error = format!("❌ Model file not found: {}", pth);
+        error!("{}", error);
+        let _ = app.emit(
+            "rvc_error",
+            serde_json::json!({
+                "error": error.clone(),
+                "type": "file_not_found",
+                "file": pth,
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }),
+        );
+        return Err(error);
+    }
+
+    // Validate index file exists (if provided)
+    if !index.is_empty() && !std::path::Path::new(&index).exists() {
+        let error = format!("❌ Index file not found: {}", index);
+        error!("{}", error);
+        let _ = app.emit(
+            "rvc_error",
+            serde_json::json!({
+                "error": error.clone(),
+                "type": "file_not_found",
+                "file": index,
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }),
+        );
+        return Err(error);
+    }
+
+    let mut is_running = state.inner().is_running.lock().unwrap();
+    if *is_running {
+        let error = "Voice conversion is already running".to_string();
+        warn!("{}", error);
+        let _ = app.emit(
+            "rvc_error",
+            serde_json::json!({
+                "error": error.clone(),
+                "type": "already_running",
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }),
+        );
+        return Err(error);
+    }
+
+    // Update configuration
+    {
+        let mut config = state.inner().config.lock().unwrap();
+        config.pth_path = pth.clone();
+        config.index_path = if index.is_empty() {
+            String::new()
+        } else {
+            index.clone()
+        };
+        config.sg_hostapi = hostapi;
+        config.sg_input_device = input_device;
+        config.sg_output_device = output_device;
+        config.sg_wasapi_exclusive = wasapi_exclusive;
+        config.sr_type = sr_type;
+        config.threshold = threshold;
+        config.pitch = pitch;
+        config.formant = formant;
+        config.index_rate = index_rate as f32;
+        config.rms_mix_rate = rms_mix_rate as f32;
+        config.f0method = f0method;
+        config.block_time = block_time as f32;
+        config.crossfade_length = crossfade_length as f32;
+        config.n_cpu = n_cpu as u32;
+        config.extra_time = extra_time as f32;
+        config.i_noise_reduce = i_noise_reduce;
+        config.o_noise_reduce = o_noise_reduce;
+        config.use_pv = use_pv;
+        // Note: function_mode is not a field in GUIConfig, handle separately if needed
+    }
+
+    // Attempt to start voice conversion
+    let config = state.inner().config.lock().unwrap().clone();
+
+    // Log detailed configuration for debugging
+    info!("🔧 Starting with configuration:");
+    info!("  - Model path: {}", config.pth_path);
+    info!("  - Index path: {}", config.index_path);
+    info!("  - F0 method: {}", config.f0method);
+    info!("  - Pitch: {}", config.pitch);
+    info!("  - Index rate: {}", config.index_rate);
+    info!("  - Block time: {}", config.block_time);
+    info!("  - Crossfade length: {}", config.crossfade_length);
+
+    match start_vc(move |gui_config| {
+        info!("🔄 Configuring RVC with parameters...");
+        *gui_config = config.clone();
+        info!("✅ RVC configuration applied");
+    }) {
+        Ok(_) => {
+            *is_running = true;
+            info!("✅ Voice conversion started successfully");
+
+            // Start audio streaming
+            *state.inner().audio_streaming.lock().unwrap() = true;
+            info!("🎵 Audio streaming enabled");
+
+            // Emit success event to frontend
+            let _ = app.emit(
+                "rvc_status",
+                serde_json::json!({
+                    "status": "started",
+                    "message": "Voice conversion started successfully"
+                }),
+            );
+
+            Ok(())
+        }
+        Err(e) => {
+            let error = format!("❌ Failed to start voice conversion: {}", e);
+            error!("{}", error);
+
+            // Emit error event to frontend
+            let _ = app.emit(
+                "rvc_error",
+                serde_json::json!({
+                    "error": error.clone(),
+                    "timestamp": chrono::Utc::now().to_rfc3339()
+                }),
+            );
+
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+async fn stop_vc(app: AppHandle, state: State<'_, VcState>) -> Result<(), String> {
+    info!("🛑 Stopping voice conversion...");
+
+    let mut is_running = state.inner().is_running.lock().unwrap();
+    if !*is_running {
+        let message = "Voice conversion is not running";
+        warn!("{}", message);
+        return Ok(()); // Don't return error, just log warning
+    }
+
+    // Stop audio streaming first
+    *state.inner().audio_streaming.lock().unwrap() = false;
+
+    // Stop voice conversion by setting VC_IS_ACTIVE to false
+    VC_IS_ACTIVE.store(false, std::sync::atomic::Ordering::Relaxed);
+    *is_running = false;
+    info!("✅ Voice conversion stopped successfully");
+
+    // Emit stop event to frontend
+    let _ = app.emit(
+        "rvc_status",
+        serde_json::json!({
+            "status": "stopped",
+            "message": "Voice conversion stopped successfully"
+        }),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
 fn update_devices(hostapi: Option<String>) -> Result<DeviceInfo, String> {
-    rvc_lib::update_devices(hostapi.as_deref())
+    rvc_lib::update_devices(hostapi.as_deref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -471,7 +737,7 @@ fn set_devices(
     input_device: String,
     output_device: String,
 ) -> Result<u32, String> {
-    rvc_lib::set_devices(&hostapi, &input_device, &output_device)
+    rvc_lib::set_devices(&hostapi, &input_device, &output_device).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -495,6 +761,10 @@ pub fn run() {
             frontend_event,
             get_init_config,
             set_values,
+            save_config,
+            load_config,
+            start_vc,
+            stop_vc,
             update_devices,
             set_devices,
             get_audio_stream_status,

@@ -1,0 +1,23 @@
+{
+  "pth": "assets/weights/kikiV1.pth",
+  "index": "logs/kikiV1.index",
+  "hostapi": "",
+  "wasapiExclusive": false,
+  "inputDevice": "",
+  "outputDevice": "",
+  "srType": "sr_model",
+  "threshold": -60,
+  "pitch": 0,
+  "formant": 0.0,
+  "indexRate": 0.75,
+  "rmsMixRate": 0.25,
+  "f0method": "fcpe",
+  "blockTime": 0.25,
+  "crossfadeLength": 0.05,
+  "nCpu": 2,
+  "extraTime": 2.5,
+  "iNoiseReduce": true,
+  "oNoiseReduce": true,
+  "usePv": false,
+  "functionMode": "vc"
+}
