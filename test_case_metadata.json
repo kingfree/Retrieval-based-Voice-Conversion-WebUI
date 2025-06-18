@@ -1,0 +1,35 @@
+{
+  "generator": "SimpleTestCaseGenerator",
+  "timestamp": "2025-06-18 18:15:30",
+  "model_path": "assets/weights/kikiV1.pth",
+  "index_path": "logs/kikiV1.index",
+  "input_audio_file": "test.wav",
+  "output_audio_file": "test_kikiV1_ref.wav",
+  "sample_rate": 48000,
+  "parameters": {
+    "pitch": 0.0,
+    "formant": 0.0,
+    "index_rate": 0.75,
+    "f0method": "rmvpe"
+  },
+  "input_stats": {
+    "length": 376832,
+    "duration": 7.850666666666666,
+    "min_value": -0.209320068359375,
+    "max_value": 0.148651123046875,
+    "rms": 0.013793235644698143,
+    "mean": -4.123313192394562e-05
+  },
+  "output_stats": {
+    "length": 376832,
+    "duration": 7.850666666666666,
+    "min_value": -0.8,
+    "max_value": 0.6318076863050727,
+    "rms": 0.06346948447798259,
+    "mean": -0.0001370595015847905
+  },
+  "processing_info": {
+    "synthetic_data": true,
+    "note": "This is synthetic test data for Rust implementation validation"
+  }
+}

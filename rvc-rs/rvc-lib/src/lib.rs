@@ -16,6 +16,12 @@ pub use realtime::{VC, start_vc};
 mod rvc_for_realtime;
 pub use rvc_for_realtime::{AudioCallback, AudioCallbackConfig, RVC, SimpleRVC, apply_crossfade};
 
+mod audio_utils;
+pub use audio_utils::{
+    AudioData, AudioStats, WindowType, apply_window, calculate_similarity, create_test_signal,
+    create_white_noise, load_wav_simple, mix_audio, save_wav_simple,
+};
+
 use std::f64::consts::PI;
 use tch::{IndexOp, Kind, Tensor};
 
