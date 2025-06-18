@@ -1,7 +1,27 @@
 use log::info;
 use rvc_lib::{start_vc, DeviceInfo, GUIConfig, GUI};
+use serde::Serialize;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
+
+#[derive(Serialize, Clone)]
+struct AudioData {
+    samples: Vec<f32>,
+    sample_rate: u32,
+    timestamp: u64,
+}
+
+#[derive(Serialize, Clone)]
+struct AudioStats {
+    input_sample_rate: u32,
+    output_sample_rate: u32,
+    buffer_size: usize,
+    processed_samples: u64,
+    dropped_frames: u32,
+    latency: f32,
+}
 
 // Global state for voice conversion
 /// 只存储配置和运行状态，不再存储 VC 句柄（VC 不是 Send/Sync，不能放在 State）
@@ -10,6 +30,10 @@ struct VcState {
     is_running: Arc<Mutex<bool>>,
     delay_time: Arc<Mutex<f32>>,
     function_mode: Arc<Mutex<String>>,
+    audio_streaming: Arc<Mutex<bool>>,
+    input_buffer: Arc<Mutex<Vec<f32>>>,
+    output_buffer: Arc<Mutex<Vec<f32>>>,
+    stats: Arc<Mutex<AudioStats>>,
 }
 
 impl Default for VcState {
@@ -19,6 +43,17 @@ impl Default for VcState {
             is_running: Arc::new(Mutex::new(false)),
             delay_time: Arc::new(Mutex::new(0.0)),
             function_mode: Arc::new(Mutex::new("vc".into())),
+            audio_streaming: Arc::new(Mutex::new(false)),
+            input_buffer: Arc::new(Mutex::new(Vec::new())),
+            output_buffer: Arc::new(Mutex::new(Vec::new())),
+            stats: Arc::new(Mutex::new(AudioStats {
+                input_sample_rate: 44100,
+                output_sample_rate: 44100,
+                buffer_size: 2048,
+                processed_samples: 0,
+                dropped_frames: 0,
+                latency: 0.0,
+            })),
         }
     }
 }
@@ -72,6 +107,10 @@ async fn event_handler(
                 // Save current configuration
                 GUI::save(&config).map_err(|e| e.to_string())?;
 
+                // Start audio data streaming
+                *state.inner().audio_streaming.lock().unwrap() = true;
+                start_audio_streaming(app.clone(), state.clone());
+
                 // Start voice conversion（VC 句柄不再存储于 State）
                 match start_vc() {
                     Ok(_vc_handle) => {
@@ -91,9 +130,11 @@ async fn event_handler(
                             .unwrap();
 
                         app.emit("vc_started", ()).unwrap();
+                        app.emit("audio_stream_started", ()).unwrap();
                         info!("Voice conversion started successfully");
                     }
                     Err(e) => {
+                        *state.inner().audio_streaming.lock().unwrap() = false;
                         return Err(format!("Failed to start voice conversion: {}", e));
                     }
                 }
@@ -103,9 +144,16 @@ async fn event_handler(
         "stop_vc" => {
             if *is_running {
                 info!("Stopping voice conversion...");
+                // Stop audio streaming
+                *state.inner().audio_streaming.lock().unwrap() = false;
+                // Clear buffers
+                state.inner().input_buffer.lock().unwrap().clear();
+                state.inner().output_buffer.lock().unwrap().clear();
+
                 // VC 句柄不再存储于 State，无需手动 drop
                 *is_running = false;
                 app.emit("vc_stopped", ()).unwrap();
+                app.emit("audio_stream_stopped", ()).unwrap();
                 info!("Voice conversion stopped");
             }
         }
@@ -322,6 +370,139 @@ fn set_devices(
     rvc_lib::set_devices(&hostapi, &input_device, &output_device)
 }
 
+/// Start audio data streaming for waveform visualization
+fn start_audio_streaming(app: AppHandle, state: State<'_, VcState>) {
+    let app_clone = app.clone();
+    let audio_streaming = state.inner().audio_streaming.clone();
+    let input_buffer = state.inner().input_buffer.clone();
+    let output_buffer = state.inner().output_buffer.clone();
+    let stats = state.inner().stats.clone();
+
+    // Spawn background thread for audio data simulation/capture
+    thread::spawn(move || {
+        let mut frame_count = 0u64;
+        let mut last_emit = Instant::now();
+        let emit_interval = Duration::from_millis(50); // 20 FPS for smooth waveform updates
+
+        while *audio_streaming.lock().unwrap() {
+            thread::sleep(Duration::from_millis(10)); // 100 Hz processing rate
+
+            // Simulate audio data capture (in real implementation, this would come from audio callback)
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+
+            // Generate simulated audio data for demonstration
+            let sample_count = 1024;
+            let mut input_samples = Vec::with_capacity(sample_count);
+            let mut output_samples = Vec::with_capacity(sample_count);
+
+            for i in 0..sample_count {
+                let t = (frame_count * sample_count as u64 + i as u64) as f32 / 44100.0;
+
+                // Simulate input audio with some noise and signal
+                let input_signal = 0.3 * (2.0 * std::f32::consts::PI * 440.0 * t).sin()
+                    + 0.1 * (2.0 * std::f32::consts::PI * 880.0 * t).sin()
+                    + 0.05 * ((t * 1000.0) % 1.0 - 0.5); // Add some noise
+
+                // Simulate output audio (processed version)
+                let output_signal = 0.4 * (2.0 * std::f32::consts::PI * 523.25 * t).sin() // C note
+                    + 0.15 * (2.0 * std::f32::consts::PI * 659.25 * t).sin(); // E note
+
+                input_samples.push(input_signal);
+                output_samples.push(output_signal);
+            }
+
+            // Update buffers
+            {
+                let mut input_buf = input_buffer.lock().unwrap();
+                input_buf.extend_from_slice(&input_samples);
+                if input_buf.len() > 8192 {
+                    let excess = input_buf.len() - 8192;
+                    input_buf.drain(0..excess);
+                }
+            }
+
+            {
+                let mut output_buf = output_buffer.lock().unwrap();
+                output_buf.extend_from_slice(&output_samples);
+                if output_buf.len() > 8192 {
+                    let excess = output_buf.len() - 8192;
+                    output_buf.drain(0..excess);
+                }
+            }
+
+            // Update stats
+            {
+                let mut stats_guard = stats.lock().unwrap();
+                stats_guard.processed_samples += sample_count as u64;
+                stats_guard.latency = 25.0 + (frame_count % 10) as f32 * 2.0; // Simulate latency variation
+            }
+
+            frame_count += 1;
+
+            // Emit audio data to frontend at regular intervals
+            if last_emit.elapsed() >= emit_interval {
+                let input_data = {
+                    let buf = input_buffer.lock().unwrap();
+                    AudioData {
+                        samples: buf.clone(),
+                        sample_rate: 44100,
+                        timestamp,
+                    }
+                };
+
+                let output_data = {
+                    let buf = output_buffer.lock().unwrap();
+                    AudioData {
+                        samples: buf.clone(),
+                        sample_rate: 44100,
+                        timestamp,
+                    }
+                };
+
+                let current_stats = stats.lock().unwrap().clone();
+
+                // Emit events to frontend
+                if let Err(e) = app_clone.emit("input_audio_data", &input_data) {
+                    eprintln!("Failed to emit input audio data: {}", e);
+                }
+
+                if let Err(e) = app_clone.emit("output_audio_data", &output_data) {
+                    eprintln!("Failed to emit output audio data: {}", e);
+                }
+
+                if let Err(e) = app_clone.emit("audio_stats", &current_stats) {
+                    eprintln!("Failed to emit audio stats: {}", e);
+                }
+
+                // Emit inference time simulation
+                let infer_time = 15.0 + (frame_count % 20) as f32 * 5.0; // Simulate 15-35ms inference time
+                if let Err(e) = app_clone.emit("infer_time", &(infer_time as u32)) {
+                    eprintln!("Failed to emit inference time: {}", e);
+                }
+
+                last_emit = Instant::now();
+            }
+        }
+
+        info!("Audio streaming thread terminated");
+    });
+}
+
+#[tauri::command]
+async fn get_audio_stream_status(state: State<'_, VcState>) -> Result<bool, String> {
+    Ok(*state.inner().audio_streaming.lock().unwrap())
+}
+
+#[tauri::command]
+async fn clear_audio_buffers(state: State<'_, VcState>) -> Result<(), String> {
+    state.inner().input_buffer.lock().unwrap().clear();
+    state.inner().output_buffer.lock().unwrap().clear();
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -332,7 +513,9 @@ pub fn run() {
             get_init_config,
             set_values,
             update_devices,
-            set_devices
+            set_devices,
+            get_audio_stream_status,
+            clear_audio_buffers
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

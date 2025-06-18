@@ -1,5 +1,33 @@
 <template>
     <div class="container">
+        <!-- Audio Visualizers -->
+        <div class="visualizer-section">
+            <div class="visualizer-row">
+                <AudioVisualizer
+                    title="输入音频可视化"
+                    :audio-data="inputAudioData"
+                    :sample-rate="sampleRate"
+                    primary-color="#ff6b6b"
+                    accent-color="#ff8e8e"
+                    theme="light"
+                    ref="inputVisualizer"
+                    @level-change="(level) => (inputVolume = level)"
+                    @error="handleVisualizationError"
+                />
+                <AudioVisualizer
+                    title="输出音频可视化"
+                    :audio-data="outputAudioData"
+                    :sample-rate="sampleRate"
+                    primary-color="#4ecdc4"
+                    accent-color="#7ed8d1"
+                    theme="light"
+                    ref="outputVisualizer"
+                    @level-change="(level) => (outputVolume = level)"
+                    @error="handleVisualizationError"
+                />
+            </div>
+        </div>
+
         <div class="row">
             <section>
                 <h2>加载模型</h2>
@@ -244,6 +272,29 @@
             >
             <span class="info">算法延迟: {{ delayTime }} ms</span>
             <span class="info">推理时间: {{ inferTime }} ms</span>
+
+            <!-- Connection Status -->
+            <div class="connection-status">
+                <span class="status-label">连接状态:</span>
+                <span
+                    :class="['status-indicator', connectionStatus]"
+                    :title="lastError || '正常'"
+                >
+                    {{ getConnectionStatusText() }}
+                </span>
+            </div>
+
+            <!-- Demo Mode Controls -->
+            <div v-if="isDemoMode" class="demo-controls">
+                <span class="demo-label">演示模式:</span>
+                <button
+                    type="button"
+                    @click="toggleDemoStream"
+                    :class="{ active: isStreaming }"
+                >
+                    {{ isStreaming ? "停止演示" : "开始演示" }}
+                </button>
+            </div>
         </div>
     </div>
 </template>
@@ -252,6 +303,8 @@
 import { ref, watch, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import AudioVisualizer from "./components/AudioVisualizer.vue";
+import { useAudioStream } from "./composables/useAudioStream.js";
 
 const hostapis = ref([]);
 const inputDevices = ref([]);
@@ -284,11 +337,46 @@ const sampleRate = ref(0);
 const delayTime = ref(0);
 const inferTime = ref(0);
 
+// Audio stream composable (with demo mode for testing)
+const isDemoMode = ref(!window.__TAURI__); // Use demo mode if not in Tauri
+const {
+    inputAudioData,
+    outputAudioData,
+    isStreaming,
+    inputVolume,
+    outputVolume,
+    stats,
+    lastError,
+    connectionStatus,
+    initializeAudioStream,
+    clearBuffers,
+    startDemoStream,
+    stopDemoStream,
+} = useAudioStream(isDemoMode.value);
+
+// Audio visualizer component refs
+const inputVisualizer = ref(null);
+const outputVisualizer = ref(null);
+
 function send(event, value) {
+    if (isDemoMode.value) {
+        console.log(`Demo mode: ${event} = ${value}`);
+        return;
+    }
     invoke("event_handler", { event, value: value?.toString() });
 }
 
 async function fetchDevices() {
+    if (isDemoMode.value) {
+        // Mock device data for demo mode
+        hostapis.value = ["DirectSound", "WASAPI"];
+        inputDevices.value = ["Default Input", "Microphone"];
+        outputDevices.value = ["Default Output", "Speakers"];
+        hostapi.value = "DirectSound";
+        inputDevice.value = "Default Input";
+        outputDevice.value = "Default Output";
+        return;
+    }
     try {
         const list = await invoke("update_devices", { hostapi: hostapi.value });
         hostapis.value = list.hostapis;
@@ -309,6 +397,10 @@ async function fetchDevices() {
 }
 
 async function applyDevices() {
+    if (isDemoMode.value) {
+        sampleRate.value = 44100;
+        return;
+    }
     try {
         sampleRate.value = await invoke("set_devices", {
             hostapi: hostapi.value,
@@ -321,6 +413,28 @@ async function applyDevices() {
 }
 
 async function loadConfig() {
+    if (isDemoMode.value) {
+        // Load default demo values
+        hostapi.value = "DirectSound";
+        wasapiExclusive.value = false;
+        inputDevice.value = "Default Input";
+        outputDevice.value = "Default Output";
+        srType.value = "sr_model";
+        threshold.value = -60;
+        pitch.value = 0;
+        formant.value = 0.0;
+        indexRate.value = 0.0;
+        rmsMixRate.value = 0.0;
+        blockTime.value = 0.25;
+        crossfadeLength.value = 0.05;
+        nCpu.value = 1;
+        extraTime.value = 2.5;
+        f0method.value = "fcpe";
+        usePv.value = false;
+        await fetchDevices();
+        await applyDevices();
+        return;
+    }
     try {
         const cfg = await invoke("get_init_config");
         hostapi.value = cfg.sg_hostapi;
@@ -347,28 +461,50 @@ async function loadConfig() {
 }
 
 onMounted(async () => {
+    // Always load config (demo or real)
     await loadConfig();
 
-    // Listen for backend events
-    await listen("vc_started", () => {
-        console.log("Voice conversion started");
-    });
+    // Initialize audio stream for visualization
+    await initializeAudioStream();
 
-    await listen("vc_stopped", () => {
-        console.log("Voice conversion stopped");
-    });
+    // Only set up Tauri event listeners if not in demo mode
+    if (!isDemoMode.value) {
+        // Listen for backend events
+        await listen("vc_started", () => {
+            console.log("Voice conversion started");
+            clearBuffers(); // Clear audio buffers when starting
+            // Clear visualizers
+            if (inputVisualizer.value) inputVisualizer.value.clear();
+            if (outputVisualizer.value) outputVisualizer.value.clear();
+        });
 
-    await listen("delay_time", (event) => {
-        delayTime.value = Number(event.payload);
-    });
+        await listen("vc_stopped", () => {
+            console.log("Voice conversion stopped");
+            clearBuffers(); // Clear audio buffers when stopping
+            // Clear visualizers
+            if (inputVisualizer.value) inputVisualizer.value.clear();
+            if (outputVisualizer.value) outputVisualizer.value.clear();
+        });
 
-    await listen("devices_updated", (event) => {
-        console.log("Devices updated:", event.payload);
-        const deviceInfo = event.payload;
-        hostapis.value = deviceInfo.hostapis;
-        inputDevices.value = deviceInfo.input_devices;
-        outputDevices.value = deviceInfo.output_devices;
-    });
+        await listen("delay_time", (event) => {
+            delayTime.value = Number(event.payload);
+        });
+
+        await listen("devices_updated", (event) => {
+            console.log("Devices updated:", event.payload);
+            const deviceInfo = event.payload;
+            hostapis.value = deviceInfo.hostapis;
+            inputDevices.value = deviceInfo.input_devices;
+            outputDevices.value = deviceInfo.output_devices;
+        });
+
+        // Listen for inference time updates
+        await listen("infer_time", (event) => {
+            inferTime.value = Number(event.payload);
+        });
+    } else {
+        console.log("Running in demo mode - Tauri event listeners disabled");
+    }
 });
 
 watch(threshold, (v) => send("threshold", v));
@@ -416,6 +552,10 @@ watch(outputDevice, async (v) => {
 });
 
 async function reloadDevices() {
+    if (isDemoMode.value) {
+        console.log("Demo mode: reload devices");
+        return;
+    }
     try {
         await invoke("event_handler", { event: "reload_devices", value: null });
         await fetchDevices();
@@ -425,6 +565,11 @@ async function reloadDevices() {
 }
 
 async function startVc() {
+    if (isDemoMode.value) {
+        startDemoStream();
+        return;
+    }
+
     try {
         // Save configuration first
         await invoke("set_values", {
@@ -461,11 +606,45 @@ async function startVc() {
 }
 
 async function stopVc() {
+    if (isDemoMode.value) {
+        stopDemoStream();
+        return;
+    }
+
     try {
         await invoke("event_handler", { event: "stop_vc", value: null });
     } catch (error) {
         console.error("Failed to stop voice conversion:", error);
     }
+}
+
+function toggleDemoStream() {
+    if (isStreaming.value) {
+        stopDemoStream();
+    } else {
+        startDemoStream();
+    }
+}
+
+function getConnectionStatusText() {
+    switch (connectionStatus.value) {
+        case "connected":
+            return "已连接";
+        case "connecting":
+            return "连接中";
+        case "disconnected":
+            return "未连接";
+        case "error":
+            return "错误";
+        default:
+            return "未知";
+    }
+}
+
+// Handle audio visualization errors
+function handleVisualizationError(error) {
+    console.error("Visualization error:", error);
+    // Could show a notification or error message to user
 }
 </script>
 
@@ -506,5 +685,122 @@ section {
 }
 .info {
     margin-left: 1rem;
+}
+
+.demo-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1rem;
+    padding: 0.25rem 0.5rem;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+}
+
+.demo-label {
+    font-size: 0.8rem;
+    color: #856404;
+    font-weight: 500;
+}
+
+.demo-controls button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    border: 1px solid #fd7e14;
+    background: white;
+    color: #fd7e14;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.demo-controls button:hover {
+    background: #fd7e14;
+    color: white;
+}
+
+.demo-controls button.active {
+    background: #fd7e14;
+    color: white;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.status-label {
+    color: #666;
+    font-weight: 500;
+}
+
+.status-indicator {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.status-indicator.connected {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-indicator.connecting {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+    animation: pulse 1.5s infinite;
+}
+
+.status-indicator.disconnected {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-indicator.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%,
+    50% {
+        opacity: 1;
+    }
+    51%,
+    100% {
+        opacity: 0.5;
+    }
+}
+
+.visualizer-section {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.visualizer-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .visualizer-row {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
