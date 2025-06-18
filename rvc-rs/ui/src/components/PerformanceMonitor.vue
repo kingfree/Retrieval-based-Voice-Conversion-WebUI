@@ -3,14 +3,11 @@
         <div class="monitor-header">
             <h4>性能监控</h4>
             <div class="monitor-controls">
-                <button @click="toggleExpanded" class="expand-btn">
-                    {{ isExpanded ? "收起" : "展开" }}
-                </button>
                 <button @click="resetMetrics" class="reset-btn">重置</button>
             </div>
         </div>
 
-        <div class="metrics-grid" :class="{ expanded: isExpanded }">
+        <div class="metrics-grid">
             <!-- Real-time metrics row -->
             <div class="metrics-row primary">
                 <div class="metric-item inference">

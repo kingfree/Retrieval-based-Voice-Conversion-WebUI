@@ -5,6 +5,39 @@
             <div class="header-content">
                 <h1 class="app-title">RVC 实时语音转换</h1>
                 <div class="header-actions">
+                    <div class="status-indicator">
+                        <div
+                            class="status-light"
+                            :class="{ active: isRunning }"
+                        ></div>
+                        <span class="status-text">
+                            {{ isRunning ? "转换中..." : "就绪" }}
+                        </span>
+                    </div>
+                    <div class="control-buttons">
+                        <button
+                            class="control-btn start-btn"
+                            @click="startVc"
+                            :disabled="!canStartVc"
+                            :class="{ pulse: isRunning }"
+                        >
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+                            </svg>
+                            {{ isRunning ? "转换中" : "开始转换" }}
+                        </button>
+
+                        <button
+                            class="control-btn stop-btn"
+                            @click="stopVc"
+                            :disabled="!canStopVc"
+                        >
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18,18H6V6H18V18Z" />
+                            </svg>
+                            停止转换
+                        </button>
+                    </div>
                     <div class="connection-status">
                         <span class="status-label">状态:</span>
                         <span
@@ -96,106 +129,44 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Row: Controls + Quick Settings -->
-            <div class="top-row">
-                <!-- Control Panel -->
-                <div class="control-panel">
-                    <div class="main-controls">
-                        <div class="control-section">
-                            <h3>语音转换控制</h3>
-                            <div class="status-indicator">
-                                <div
-                                    class="status-light"
-                                    :class="{ active: isRunning }"
-                                ></div>
-                                <span class="status-text">
-                                    {{ isRunning ? "转换中..." : "就绪" }}
-                                </span>
-                            </div>
-                            <div class="control-buttons">
-                                <button
-                                    class="control-btn start-btn"
-                                    @click="startVc"
-                                    :disabled="!canStartVc"
-                                    :class="{ pulse: isRunning }"
-                                >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="currentColor"
-                                    >
-                                        <path
-                                            d="M8,5.14V19.14L19,12.14L8,5.14Z"
-                                        />
-                                    </svg>
-                                    {{ isRunning ? "转换中" : "开始转换" }}
-                                </button>
-
-                                <button
-                                    class="control-btn stop-btn"
-                                    @click="stopVc"
-                                    :disabled="!canStopVc"
-                                >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="currentColor"
-                                    >
-                                        <path d="M18,18H6V6H18V18Z" />
-                                    </svg>
-                                    停止转换
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mode-selector">
-                        <label class="mode-option">
-                            <input
-                                type="radio"
-                                value="im"
-                                v-model="functionMode"
-                            />
-                            <span>输入监听</span>
-                        </label>
-                        <label class="mode-option">
-                            <input
-                                type="radio"
-                                value="vc"
-                                v-model="functionMode"
-                            />
-                            <span>输出变声</span>
-                        </label>
+            <!-- Quick Settings -->
+            <div class="quick-settings">
+                <div class="mode-selector">
+                    <label class="mode-option">
+                        <input type="radio" value="im" v-model="functionMode" />
+                        <span>输入监听</span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" value="vc" v-model="functionMode" />
+                        <span>输出变声</span>
+                    </label>
+                </div>
+                <div class="quick-setting">
+                    <label>响应阈值</label>
+                    <div class="slider-container">
+                        <input
+                            type="range"
+                            min="-60"
+                            max="0"
+                            v-model.number="threshold"
+                            class="slider"
+                        />
+                        <span class="value">{{ threshold }}dB</span>
                     </div>
                 </div>
 
-                <!-- Quick Settings -->
-                <div class="quick-settings">
-                    <div class="quick-setting">
-                        <label>响应阈值</label>
-                        <div class="slider-container">
-                            <input
-                                type="range"
-                                min="-60"
-                                max="0"
-                                v-model.number="threshold"
-                                class="slider"
-                            />
-                            <span class="value">{{ threshold }}dB</span>
-                        </div>
-                    </div>
-
-                    <div class="quick-setting">
-                        <label>音调设置</label>
-                        <div class="slider-container">
-                            <input
-                                type="range"
-                                min="-16"
-                                max="16"
-                                step="1"
-                                v-model.number="pitch"
-                                class="slider"
-                            />
-                            <span class="value">{{ pitch }}</span>
-                        </div>
+                <div class="quick-setting">
+                    <label>音调设置</label>
+                    <div class="slider-container">
+                        <input
+                            type="range"
+                            min="-16"
+                            max="16"
+                            step="1"
+                            v-model.number="pitch"
+                            class="slider"
+                        />
+                        <span class="value">{{ pitch }}</span>
                     </div>
                 </div>
             </div>
@@ -204,18 +175,7 @@
             <div class="bottom-row">
                 <!-- Visualizations -->
                 <div class="visualizations">
-                    <div class="viz-header">
-                        <h3>音频可视化</h3>
-                        <button
-                            class="viz-toggle"
-                            @click="toggleVisualizations"
-                            :class="{ active: showVisualizations }"
-                        >
-                            {{ showVisualizations ? "收起" : "展开" }}
-                        </button>
-                    </div>
-
-                    <div v-show="showVisualizations" class="viz-content">
+                    <div class="viz-content">
                         <div class="visualizer-grid">
                             <AudioVisualizer
                                 title="输入音频"
@@ -1434,7 +1394,6 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    overflow: hidden;
 }
 
 /* Top Row */
@@ -1488,7 +1447,6 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1rem;
     padding: 0.5rem;
     background: rgba(0, 0, 0, 0.05);
     border-radius: 6px;
@@ -2007,6 +1965,7 @@ onUnmounted(() => {
     padding: 0.4rem 0.75rem;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
+    min-width: 10em;
 }
 
 .status-label {
@@ -2091,333 +2050,6 @@ onUnmounted(() => {
     }
 }
 
-/* Responsive Design for 800x600 and smaller screens */
-@media (max-width: 800px), (max-height: 600px) {
-    .app-container {
-        font-size: 12px;
-        height: 100vh;
-        overflow: hidden;
-    }
-
-    .app-header {
-        padding: 0.3rem 0;
-        min-height: 45px;
-        flex-shrink: 0;
-    }
-
-    .header-content {
-        padding: 0 0.6rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-    }
-
-    .app-title {
-        font-size: 0.85rem;
-        margin: 0;
-        white-space: nowrap;
-    }
-
-    .connection-status {
-        font-size: 0.65rem;
-        display: flex;
-        align-items: center;
-        gap: 0.3rem;
-    }
-
-    .status-label {
-        display: none;
-    }
-
-    .status-indicator {
-        padding: 0.15rem 0.3rem;
-        font-size: 0.65rem;
-        border-radius: 3px;
-    }
-
-    .settings-toggle {
-        padding: 0.3rem;
-        width: 28px;
-        height: 28px;
-        flex-shrink: 0;
-    }
-
-    .settings-toggle svg {
-        width: 14px;
-        height: 14px;
-    }
-
-    .main-content {
-        padding: 0.3rem;
-        gap: 0.3rem;
-        flex: 1;
-        overflow-y: auto;
-    }
-
-    .top-row {
-        grid-template-columns: 1fr;
-        gap: 0.3rem;
-    }
-
-    .bottom-row {
-        grid-template-columns: 1fr;
-        gap: 0.3rem;
-    }
-
-    .control-panel,
-    .quick-settings,
-    .visualizations,
-    .performance-panel {
-        padding: 0.5rem;
-        margin: 0;
-        border-radius: 6px;
-    }
-
-    .control-section {
-        margin-bottom: 0.5rem;
-    }
-
-    .control-section:last-child {
-        margin-bottom: 0;
-    }
-
-    .control-section h3 {
-        font-size: 0.8rem;
-        margin-bottom: 0.3rem;
-        line-height: 1.2;
-    }
-
-    .status-indicator.connected,
-    .status-indicator.connecting,
-    .status-indicator.disconnected,
-    .status-indicator.error {
-        font-size: 0.65rem;
-    }
-
-    .status-light {
-        width: 6px;
-        height: 6px;
-    }
-
-    .main-controls {
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 0.3rem;
-        justify-content: center;
-    }
-
-    .control-buttons {
-        gap: 0.3rem;
-        justify-content: center;
-    }
-
-    .control-btn {
-        padding: 0.35rem 0.7rem;
-        font-size: 0.7rem;
-        min-width: 70px;
-        border-radius: 4px;
-    }
-
-    .control-btn svg {
-        width: 12px;
-        height: 12px;
-    }
-
-    .mode-selector {
-        gap: 0.25rem;
-        justify-content: center;
-        flex-wrap: wrap;
-    }
-
-    .mode-option {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.65rem;
-        min-width: 45px;
-        border-radius: 3px;
-    }
-
-    .quick-setting {
-        margin-bottom: 0.4rem;
-    }
-
-    .quick-setting:last-child {
-        margin-bottom: 0;
-    }
-
-    .quick-setting label {
-        font-size: 0.7rem;
-        margin-bottom: 0.15rem;
-        display: block;
-    }
-
-    .slider-container {
-        gap: 0.3rem;
-        align-items: center;
-    }
-
-    .slider {
-        height: 3px;
-        min-width: 40px;
-        flex: 1;
-    }
-
-    .slider::-webkit-slider-thumb {
-        width: 12px;
-        height: 12px;
-    }
-
-    .slider::-moz-range-thumb {
-        width: 12px;
-        height: 12px;
-    }
-
-    .value {
-        font-size: 0.65rem;
-        min-width: 30px;
-        text-align: center;
-    }
-
-    .visualizer-grid {
-        grid-template-columns: 1fr;
-        gap: 0.3rem;
-    }
-
-    .settings-panel {
-        width: 100%;
-        height: 100vh;
-        border-radius: 0;
-        padding: 0.5rem;
-        overflow-y: auto;
-    }
-
-    .settings-header {
-        padding: 0.5rem;
-        margin: -0.5rem -0.5rem 0.5rem -0.5rem;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .settings-header h2 {
-        font-size: 0.9rem;
-        margin: 0;
-    }
-
-    .close-btn {
-        width: 24px;
-        height: 24px;
-        padding: 0.2rem;
-    }
-
-    .close-btn svg {
-        width: 12px;
-        height: 12px;
-    }
-
-    .settings-tabs {
-        gap: 0.2rem;
-        flex-wrap: wrap;
-        margin-bottom: 0.5rem;
-    }
-
-    .tab-btn {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.7rem;
-        flex: 1;
-        min-width: 55px;
-        border-radius: 3px;
-    }
-
-    .settings-content {
-        max-height: calc(100vh - 120px);
-        overflow-y: auto;
-    }
-
-    .settings-section {
-        margin-bottom: 0.75rem;
-    }
-
-    .settings-section:last-child {
-        margin-bottom: 0;
-    }
-
-    .settings-section h3 {
-        font-size: 0.75rem;
-        margin-bottom: 0.4rem;
-    }
-
-    .form-group {
-        margin-bottom: 0.5rem;
-    }
-
-    .form-group:last-child {
-        margin-bottom: 0;
-    }
-
-    .form-group label {
-        font-size: 0.7rem;
-        margin-bottom: 0.15rem;
-        display: block;
-    }
-
-    .file-input,
-    .select-input {
-        padding: 0.3rem;
-        font-size: 0.7rem;
-        border-radius: 3px;
-    }
-
-    .file-name {
-        font-size: 0.65rem;
-        padding: 0.25rem;
-        line-height: 1.2;
-    }
-
-    .file-hint {
-        font-size: 0.6rem;
-        line-height: 1.2;
-    }
-
-    .radio-group,
-    .checkbox-group {
-        gap: 0.3rem;
-        flex-wrap: wrap;
-    }
-
-    .radio-label,
-    .checkbox-label {
-        font-size: 0.7rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 3px;
-    }
-
-    .suggestion-btn {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.65rem;
-        border-radius: 3px;
-    }
-
-    .reload-btn {
-        padding: 0.25rem;
-        width: 24px;
-        height: 24px;
-        border-radius: 3px;
-    }
-
-    .reload-btn svg {
-        width: 12px;
-        height: 12px;
-    }
-
-    .info-text {
-        font-size: 0.65rem;
-        line-height: 1.3;
-        padding: 0.3rem;
-    }
-}
-
 @media (max-width: 1200px) {
     .main-content {
         padding: 1rem;
@@ -2430,49 +2062,6 @@ onUnmounted(() => {
 
     .visualizer-grid {
         grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) and (min-width: 481px) {
-    .app-container {
-        font-size: 14px;
-    }
-
-    .header-content {
-        padding: 0 1rem;
-    }
-
-    .app-title {
-        font-size: 1.1rem;
-    }
-
-    .top-row {
-        grid-template-columns: 1fr;
-    }
-
-    .main-controls {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .mode-selector {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .settings-panel {
-        width: 100%;
-        height: 100vh;
-        border-radius: 0;
-    }
-
-    .settings-tabs {
-        overflow-x: auto;
-    }
-
-    .tab-btn {
-        white-space: nowrap;
-        min-width: 120px;
     }
 }
 
