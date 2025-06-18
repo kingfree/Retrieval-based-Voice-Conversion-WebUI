@@ -538,6 +538,57 @@ async fn clear_audio_buffers() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn update_rms_mix_rate(rate: f32) -> Result<(), String> {
+    info!("🎵 Updating RMS mix rate to: {}", rate);
+    // Note: This would need access to the active VC instance
+    // For now, this updates the configuration
+    let mut config = GUI::load().map_err(|e| e.to_string())?;
+    config.rms_mix_rate = rate.clamp(0.0, 1.0);
+    GUI::save(&config).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_noise_reduce(input: bool, output: bool) -> Result<(), String> {
+    info!(
+        "🔇 Updating noise reduction - Input: {}, Output: {}",
+        input, output
+    );
+    let mut config = GUI::load().map_err(|e| e.to_string())?;
+    config.i_noise_reduce = input;
+    config.o_noise_reduce = output;
+    GUI::save(&config).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_use_pv(use_pv: bool) -> Result<(), String> {
+    info!("🔄 Updating phase vocoder usage to: {}", use_pv);
+    let mut config = GUI::load().map_err(|e| e.to_string())?;
+    config.use_pv = use_pv;
+    GUI::save(&config).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_threshold(threshold: f32) -> Result<(), String> {
+    info!("📊 Updating audio threshold to: {} dB", threshold);
+    let mut config = GUI::load().map_err(|e| e.to_string())?;
+    config.threshold = threshold;
+    GUI::save(&config).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_f0_method(method: String) -> Result<(), String> {
+    info!("🎼 Updating F0 method to: {}", method);
+    let mut config = GUI::load().map_err(|e| e.to_string())?;
+    config.f0method = method;
+    GUI::save(&config).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -554,7 +605,12 @@ pub fn run() {
             start_voice_conversion,
             stop_voice_conversion,
             get_vc_status,
-            clear_audio_buffers
+            clear_audio_buffers,
+            update_rms_mix_rate,
+            update_noise_reduce,
+            update_use_pv,
+            update_threshold,
+            update_f0_method
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

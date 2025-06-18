@@ -68,6 +68,17 @@ pub struct RVC {
     pub streaming: bool, // Whether streaming is active
     pub stream_handle: Option<Arc<Mutex<StreamHandle>>>, // Handle to streaming resources
     pub audio_callback: Option<AudioCallback>, // Audio processing callback
+
+    // GUI Configuration parameters
+    pub rms_mix_rate: f32,     // RMS mixing rate for volume envelope
+    pub i_noise_reduce: bool,  // Input noise reduction flag
+    pub o_noise_reduce: bool,  // Output noise reduction flag
+    pub use_pv: bool,          // Use phase vocoder flag
+    pub threshold: f32,        // Audio threshold level
+    pub block_time: f32,       // Block processing time
+    pub crossfade_length: f32, // Crossfade length for smooth transitions
+    pub extra_time: f32,       // Extra processing time
+    pub f0method: String,      // F0 estimation method
 }
 
 /// Handle for managing streaming resources
@@ -167,6 +178,15 @@ impl RVC {
             tgt_sr: 40000,             // Default target sample rate
             if_f0: 1,                  // Default to F0-conditioned model
             version: "v2".to_string(), // Default version
+            rms_mix_rate: cfg.rms_mix_rate,
+            i_noise_reduce: cfg.i_noise_reduce,
+            o_noise_reduce: cfg.o_noise_reduce,
+            use_pv: cfg.use_pv,
+            threshold: cfg.threshold,
+            block_time: cfg.block_time,
+            crossfade_length: cfg.crossfade_length,
+            extra_time: cfg.extra_time,
+            f0method: cfg.f0method.clone(),
             cache_pitch,
             cache_pitchf,
             index_loaded: false,
@@ -397,6 +417,42 @@ impl RVC {
         println!("Index rate changed to: {}", new_index_rate);
     }
 
+    /// Update RMS mixing rate for volume envelope mixing
+    pub fn change_rms_mix_rate(&mut self, new_rms_mix_rate: f32) {
+        self.rms_mix_rate = new_rms_mix_rate.clamp(0.0, 1.0);
+        println!("RMS mix rate changed to: {}", self.rms_mix_rate);
+    }
+
+    /// Update noise reduction settings
+    pub fn change_noise_reduce(&mut self, input_noise_reduce: bool, output_noise_reduce: bool) {
+        self.i_noise_reduce = input_noise_reduce;
+        self.o_noise_reduce = output_noise_reduce;
+        println!(
+            "Noise reduction changed - Input: {}, Output: {}",
+            self.i_noise_reduce, self.o_noise_reduce
+        );
+    }
+
+    /// Update phase vocoder usage setting
+    pub fn change_use_pv(&mut self, use_pv: bool) {
+        self.use_pv = use_pv;
+        println!("Phase vocoder usage changed to: {}", self.use_pv);
+    }
+
+    /// Update audio threshold level
+    pub fn change_threshold(&mut self, new_threshold: f32) {
+        self.threshold = new_threshold;
+        println!("Audio threshold changed to: {} dB", self.threshold);
+    }
+
+    /// Update F0 estimation method
+    pub fn change_f0_method(&mut self, new_f0_method: String) {
+        self.f0method = new_f0_method.clone();
+        // Reinitialize F0 estimator with new method
+        self.init_f0_estimator();
+        println!("F0 method changed to: {}", new_f0_method);
+    }
+
     /// Get model information and status.
     pub fn get_model_info(&self) -> ModelInfo {
         let _faiss_info = self.faiss_index.as_ref().map(|idx| idx.info());
@@ -479,7 +535,7 @@ impl RVC {
 
         // Step 4: Generator inference
         println!("🎼 运行生成器推理...");
-        let infered_audio = self.run_generator_inference_with_progress(
+        let mut infered_audio = self.run_generator_inference_with_progress(
             feats,
             p_len,
             cache_pitch,
@@ -490,8 +546,32 @@ impl RVC {
         )?;
         let t5 = Instant::now();
 
+        // Step 5: Post-processing
+        println!("🔧 后处理...");
+
+        // Apply input noise reduction to original audio if needed
+        let processed_input = if self.i_noise_reduce {
+            self.apply_noise_reduction(input_wav, true)
+        } else {
+            input_wav.to_vec()
+        };
+
+        // Apply RMS volume envelope mixing
+        if self.rms_mix_rate < 1.0 {
+            println!("  应用 RMS 音量包络混合 (rate: {:.2})", self.rms_mix_rate);
+            infered_audio = self.apply_rms_mixing(&processed_input, &infered_audio);
+        }
+
+        // Apply output noise reduction
+        if self.o_noise_reduce {
+            println!("  应用输出降噪");
+            infered_audio = self.apply_noise_reduction(&infered_audio, false);
+        }
+
+        let t6 = Instant::now();
+
         // Print timing information
-        let total_time = (t5 - t1).as_secs_f32();
+        let total_time = (t6 - t1).as_secs_f32();
         let real_time_factor = input_duration / total_time;
 
         println!("✅ RVC 推理完成!");
@@ -500,11 +580,105 @@ impl RVC {
         println!("  索引搜索: {:.3}s", (t3 - t2).as_secs_f32());
         println!("  F0 处理:  {:.3}s", (t4 - t3).as_secs_f32());
         println!("  生成器:   {:.3}s", (t5 - t4).as_secs_f32());
+        println!("  后处理:   {:.3}s", (t6 - t5).as_secs_f32());
         println!("  总计:     {:.3}s", total_time);
         println!("  实时倍率: {:.1}x", real_time_factor);
         println!("  输出长度: {} 样本", infered_audio.len());
 
         Ok(infered_audio)
+    }
+
+    /// Apply RMS volume envelope mixing between input and inferred audio
+    fn apply_rms_mixing(&self, input_wav: &[f32], infer_wav: &[f32]) -> Vec<f32> {
+        if self.rms_mix_rate >= 1.0 {
+            // No mixing needed when rate is 1.0 or higher
+            return infer_wav.to_vec();
+        }
+
+        let mut result = infer_wav.to_vec();
+        let min_len = input_wav.len().min(infer_wav.len());
+
+        if min_len == 0 {
+            return result;
+        }
+
+        // Calculate frame parameters (similar to Python implementation)
+        let zc = 160; // 1% of 16kHz sample rate
+        let frame_length = 4 * zc; // 640 samples
+        let hop_length = zc; // 160 samples
+
+        // Calculate RMS for input audio
+        let mut rms1 = Vec::new();
+        for i in (0..min_len).step_by(hop_length) {
+            let end = (i + frame_length).min(min_len);
+            let frame = &input_wav[i..end];
+            let rms = (frame.iter().map(|x| x * x).sum::<f32>() / frame.len() as f32).sqrt();
+            rms1.push(rms);
+        }
+
+        // Calculate RMS for inferred audio
+        let mut rms2 = Vec::new();
+        for i in (0..min_len).step_by(hop_length) {
+            let end = (i + frame_length).min(min_len);
+            let frame = &infer_wav[i..end];
+            let rms = (frame.iter().map(|x| x * x).sum::<f32>() / frame.len() as f32).sqrt();
+            rms2.push(rms.max(1e-3)); // Prevent division by zero
+        }
+
+        // Interpolate RMS values to match audio length
+        for i in 0..min_len {
+            let frame_idx = i / hop_length;
+            let next_frame_idx = (frame_idx + 1).min(rms1.len() - 1);
+            let frame_progress = (i % hop_length) as f32 / hop_length as f32;
+
+            // Linear interpolation
+            let rms1_val = if frame_idx < rms1.len() && next_frame_idx < rms1.len() {
+                rms1[frame_idx] * (1.0 - frame_progress) + rms1[next_frame_idx] * frame_progress
+            } else if frame_idx < rms1.len() {
+                rms1[frame_idx]
+            } else {
+                0.0
+            };
+
+            let rms2_val = if frame_idx < rms2.len() && next_frame_idx < rms2.len() {
+                rms2[frame_idx] * (1.0 - frame_progress) + rms2[next_frame_idx] * frame_progress
+            } else if frame_idx < rms2.len() {
+                rms2[frame_idx]
+            } else {
+                1e-3
+            };
+
+            // Apply RMS mixing
+            let ratio = (rms1_val / rms2_val).powf(1.0 - self.rms_mix_rate);
+            result[i] *= ratio;
+        }
+
+        result
+    }
+
+    /// Apply noise reduction using simple spectral gating
+    fn apply_noise_reduction(&self, input_wav: &[f32], is_input: bool) -> Vec<f32> {
+        let should_reduce = if is_input {
+            self.i_noise_reduce
+        } else {
+            self.o_noise_reduce
+        };
+
+        if !should_reduce {
+            return input_wav.to_vec();
+        }
+
+        // Simple noise gate based on threshold
+        let mut result = input_wav.to_vec();
+        let threshold_linear = 10.0_f32.powf(self.threshold / 20.0); // Convert dB to linear
+
+        for sample in result.iter_mut() {
+            if sample.abs() < threshold_linear {
+                *sample *= 0.1; // Reduce noise by 90%
+            }
+        }
+
+        result
     }
 
     /// Extract features using HuBERT model with progress logging
@@ -2213,4 +2387,122 @@ mod tests {
     }
 
     // Test removed - SimpleRVC and clone_for_callback deleted as not in Python implementation
+
+    #[test]
+    fn test_config_parameter_passing() {
+        // Test that all GUI configuration parameters are correctly passed to RVC
+        let mut cfg = GUIConfig::default();
+
+        // Set all configuration parameters
+        cfg.pitch = 5.0;
+        cfg.formant = 1.2;
+        cfg.rms_mix_rate = 0.7;
+        cfg.index_rate = 0.8;
+        cfg.i_noise_reduce = true;
+        cfg.o_noise_reduce = true;
+        cfg.use_pv = true;
+        cfg.threshold = -30.0;
+        cfg.block_time = 0.5;
+        cfg.crossfade_length = 0.1;
+        cfg.extra_time = 3.0;
+        cfg.f0method = "fcpe".to_string();
+        cfg.use_jit = true;
+        cfg.n_cpu = 8;
+
+        let rvc = RVC::new(&cfg);
+
+        // Verify all parameters are correctly passed
+        assert_eq!(rvc.f0_up_key, 5.0);
+        assert_eq!(rvc.formant_shift, 1.2);
+        assert_eq!(rvc.rms_mix_rate, 0.7);
+        assert_eq!(rvc.index_rate, 0.8);
+        assert_eq!(rvc.i_noise_reduce, true);
+        assert_eq!(rvc.o_noise_reduce, true);
+        assert_eq!(rvc.use_pv, true);
+        assert_eq!(rvc.threshold, -30.0);
+        assert_eq!(rvc.block_time, 0.5);
+        assert_eq!(rvc.crossfade_length, 0.1);
+        assert_eq!(rvc.extra_time, 3.0);
+        assert_eq!(rvc.f0method, "fcpe");
+        assert_eq!(rvc.use_jit, true);
+        assert_eq!(rvc.n_cpu, 8);
+    }
+
+    #[test]
+    fn test_rms_mixing_functionality() {
+        let mut cfg = GUIConfig::default();
+        cfg.rms_mix_rate = 0.5; // 50% mixing
+
+        let rvc = RVC::new(&cfg);
+
+        // Test RMS mixing with different input levels
+        let input_high = vec![0.8; 100]; // High level input
+        let infer_low = vec![0.2; 100]; // Low level inference output
+
+        let result = rvc.apply_rms_mixing(&input_high, &infer_low);
+
+        // Result should be adjusted based on RMS mixing
+        assert_eq!(result.len(), 100);
+        // The exact values depend on the RMS calculation, but should be modified
+        assert_ne!(result, infer_low);
+    }
+
+    #[test]
+    fn test_noise_reduction_functionality() {
+        let mut cfg = GUIConfig::default();
+        cfg.i_noise_reduce = true;
+        cfg.o_noise_reduce = true;
+        cfg.threshold = -20.0; // -20dB threshold
+
+        let rvc = RVC::new(&cfg);
+
+        // Test noise reduction with low-level signal
+        let noisy_input = vec![0.001; 100]; // Very low level signal
+
+        let result_input = rvc.apply_noise_reduction(&noisy_input, true);
+        let result_output = rvc.apply_noise_reduction(&noisy_input, false);
+
+        // Noise reduction should reduce the signal further
+        assert!(result_input[0] < noisy_input[0]);
+        assert!(result_output[0] < noisy_input[0]);
+    }
+
+    #[test]
+    fn test_config_parameter_updates() {
+        let mut cfg = GUIConfig::default();
+        let mut rvc = RVC::new(&cfg);
+
+        // Test updating various parameters
+        rvc.change_rms_mix_rate(0.8);
+        assert_eq!(rvc.rms_mix_rate, 0.8);
+
+        rvc.change_noise_reduce(true, false);
+        assert_eq!(rvc.i_noise_reduce, true);
+        assert_eq!(rvc.o_noise_reduce, false);
+
+        rvc.change_use_pv(true);
+        assert_eq!(rvc.use_pv, true);
+
+        rvc.change_threshold(-25.0);
+        assert_eq!(rvc.threshold, -25.0);
+
+        rvc.change_f0_method("rmvpe".to_string());
+        assert_eq!(rvc.f0method, "rmvpe");
+    }
+
+    #[test]
+    fn test_rms_mix_rate_clamping() {
+        let mut cfg = GUIConfig::default();
+        let mut rvc = RVC::new(&cfg);
+
+        // Test that RMS mix rate is properly clamped
+        rvc.change_rms_mix_rate(1.5); // Above 1.0
+        assert_eq!(rvc.rms_mix_rate, 1.0);
+
+        rvc.change_rms_mix_rate(-0.5); // Below 0.0
+        assert_eq!(rvc.rms_mix_rate, 0.0);
+
+        rvc.change_rms_mix_rate(0.5); // Valid range
+        assert_eq!(rvc.rms_mix_rate, 0.5);
+    }
 }

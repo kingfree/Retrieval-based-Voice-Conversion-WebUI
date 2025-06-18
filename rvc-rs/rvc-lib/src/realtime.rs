@@ -41,6 +41,41 @@ impl VC {
             rvc.change_index_rate(rate);
         }
     }
+
+    /// Update the RMS mixing rate of the running RVC instance.
+    pub fn change_rms_mix_rate(&self, rate: f32) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_rms_mix_rate(rate);
+        }
+    }
+
+    /// Update the noise reduction settings of the running RVC instance.
+    pub fn change_noise_reduce(&self, input: bool, output: bool) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_noise_reduce(input, output);
+        }
+    }
+
+    /// Update the phase vocoder usage setting of the running RVC instance.
+    pub fn change_use_pv(&self, use_pv: bool) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_use_pv(use_pv);
+        }
+    }
+
+    /// Update the audio threshold level of the running RVC instance.
+    pub fn change_threshold(&self, threshold: f32) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_threshold(threshold);
+        }
+    }
+
+    /// Update the F0 estimation method of the running RVC instance.
+    pub fn change_f0_method(&self, method: String) {
+        if let Ok(mut rvc) = self._rvc.lock() {
+            rvc.change_f0_method(method);
+        }
+    }
 }
 
 /// Start realtime voice conversion using the previously selected devices.
@@ -172,14 +207,27 @@ pub fn start_vc_with_callback(audio_callback: Option<AudioDataCallback>) -> Resu
                 if !last.is_empty() {
                     let len = crossfade_frames.min(last.len()).min(processed.len());
                     if len > 0 {
-                        let a = Tensor::from_slice(&last[last.len() - len..]);
-                        let b = Tensor::from_slice(&processed[..len]);
-                        let fade_out_start = crossfade_frames - len;
-                        let fade_out = Tensor::from_slice(&fade_out_c[fade_out_start..]);
-                        let fade_in = Tensor::from_slice(&fade_in_c[fade_out_start..]);
-                        let result = phase_vocoder(&a, &b, &fade_out, &fade_in);
-                        let res_vec: Vec<f32> = Vec::<f32>::try_from(result).unwrap();
-                        processed[..len].copy_from_slice(&res_vec);
+                        if cfg_in.use_pv {
+                            // Use phase vocoder for smooth crossfading
+                            let a = Tensor::from_slice(&last[last.len() - len..]);
+                            let b = Tensor::from_slice(&processed[..len]);
+                            let fade_out_start = crossfade_frames - len;
+                            let fade_out = Tensor::from_slice(&fade_out_c[fade_out_start..]);
+                            let fade_in = Tensor::from_slice(&fade_in_c[fade_out_start..]);
+                            let result = phase_vocoder(&a, &b, &fade_out, &fade_in);
+                            let res_vec: Vec<f32> = Vec::<f32>::try_from(result).unwrap();
+                            processed[..len].copy_from_slice(&res_vec);
+                        } else {
+                            // Simple linear crossfade without phase vocoder
+                            for i in 0..len {
+                                let fade_ratio = i as f32 / (len - 1) as f32;
+                                let fade_in_val =
+                                    (fade_ratio * std::f32::consts::PI * 0.5).sin().powi(2);
+                                let fade_out_val = 1.0 - fade_in_val;
+                                processed[i] = processed[i] * fade_in_val
+                                    + last[last.len() - len + i] * fade_out_val;
+                            }
+                        }
                     }
                 }
                 *last = processed[processed.len().saturating_sub(crossfade_frames)..].to_vec();
