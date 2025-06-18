@@ -104,7 +104,7 @@ impl FeatureExtractor {
             };
 
             let conv = nn::conv1d(
-                vs / format!("conv_layers.{}", i),
+                vs / format!("conv_layers_{}", i),
                 in_dim,
                 out_dim,
                 kernel_size,
@@ -114,7 +114,7 @@ impl FeatureExtractor {
 
             // Layer Normalization
             let layer_norm = nn::layer_norm(
-                vs / format!("layer_norms.{}", i),
+                vs / format!("layer_norms_{}", i),
                 vec![out_dim],
                 Default::default(),
             );
@@ -291,7 +291,7 @@ impl TransformerEncoder {
         let mut layers = Vec::new();
 
         for i in 0..config.encoder_layers {
-            let layer = TransformerEncoderLayer::new(&(vs / format!("layers.{}", i)), config);
+            let layer = TransformerEncoderLayer::new(&(vs / format!("layers_{}", i)), config);
             layers.push(layer);
         }
 

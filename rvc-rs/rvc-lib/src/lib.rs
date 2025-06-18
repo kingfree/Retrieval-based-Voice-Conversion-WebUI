@@ -42,9 +42,21 @@ pub use generator::{
     NSFHiFiGANGenerator, ResidualBlock, UpsampleBlock,
 };
 
+mod model_loader;
+pub use model_loader::{
+    F0ModelConfig, GeneratorModelConfig, HuBERTModelConfig, ModelConfig as ModelLoaderConfig,
+    ModelLoadStats, ModelLoader,
+};
+
 mod inference;
 pub use inference::{
     BatchInference, F0FilterConfig, InferenceConfig, InferenceStats, RVCInference,
+};
+
+mod audio_pipeline;
+pub use audio_pipeline::{
+    AudioPipeline, AudioPipelineConfig, AudioPostprocessingConfig, AudioPreprocessingConfig,
+    ProcessingProgress, ProcessingStage, ProgressCallback,
 };
 
 use std::f64::consts::PI;

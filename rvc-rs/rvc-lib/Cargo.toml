@@ -39,3 +39,11 @@ path = "examples/test_inference.rs"
 [[example]]
 name = "rvc_demo"
 path = "examples/rvc_demo.rs"
+
+[[example]]
+name = "test_complete_pipeline"
+path = "../examples/test_complete_pipeline.rs"
+
+[[example]]
+name = "test_fix_verification"
+path = "../examples/test_fix_verification.rs"

@@ -9,6 +9,7 @@ use crate::{
     faiss_index::{FaissIndex, SearchResult},
     generator::{GeneratorConfig, NSFHiFiGANGenerator},
     hubert::{HuBERT, HuBERTConfig},
+    model_loader::{ModelConfig as ModelLoaderConfig, ModelLoadStats, ModelLoader},
 };
 
 use anyhow::Result;
@@ -84,6 +85,8 @@ pub struct RVCInference {
     f0_estimator: F0Estimator,
     index: Option<FaissIndex>,
     vs: nn::VarStore,
+    model_config: ModelLoaderConfig,
+    model_stats: Option<ModelLoadStats>,
 }
 
 impl RVCInference {
@@ -93,20 +96,50 @@ impl RVCInference {
         model_path: impl AsRef<Path>,
         index_path: Option<impl AsRef<Path>>,
     ) -> Result<Self> {
-        let vs = nn::VarStore::new(config.device);
+        println!("🚀 初始化 RVC 推理引擎...");
+
+        let mut vs = nn::VarStore::new(config.device);
+
+        // 创建模型加载器
+        let model_loader = ModelLoader::new(config.device).with_debug_mode(true);
+
+        // 加载模型配置和权重
+        let (model_config, model_stats) =
+            Self::load_model_and_config(&model_loader, model_path.as_ref(), &mut vs)?;
+
+        println!("📊 使用模型配置:");
+        println!("   - 版本: {}", model_config.version);
+        println!("   - 采样率: {}Hz", model_config.sample_rate);
+        println!("   - 特征维度: {}", model_config.feature_dim);
 
         // 初始化 HuBERT
-        let hubert_config = HuBERTConfig::default();
+        let hubert_config = HuBERTConfig {
+            feature_dim: model_config.feature_dim,
+            encoder_layers: model_config.hubert.encoder_layers,
+            encoder_attention_heads: model_config.hubert.attention_heads,
+            encoder_ffn_embed_dim: model_config.hubert.ffn_dim,
+            dropout: model_config.hubert.dropout,
+            ..Default::default()
+        };
         let hubert = HuBERT::new(&vs.root(), hubert_config, config.device);
 
         // 初始化生成器
-        let generator_config = GeneratorConfig::default();
+        let generator_config = GeneratorConfig {
+            input_dim: model_config.generator.input_dim,
+            upsample_rates: model_config.generator.upsample_rates.clone(),
+            upsample_kernel_sizes: model_config.generator.upsample_kernel_sizes.clone(),
+            resblock_kernel_sizes: model_config.generator.resblock_kernel_sizes.clone(),
+            resblock_dilation_sizes: model_config.generator.resblock_dilation_sizes.clone(),
+            leaky_relu_slope: model_config.generator.leaky_relu_slope,
+            use_nsf: model_config.generator.use_nsf,
+            ..Default::default()
+        };
         let generator = NSFHiFiGANGenerator::new(&vs.root(), generator_config);
 
         // 初始化 F0 估计器
         let f0_config = F0Config {
-            f0_min: 50.0,
-            f0_max: 1100.0,
+            f0_min: model_config.f0_config.f0_min,
+            f0_max: model_config.f0_config.f0_max,
             ..Default::default()
         };
         let f0_estimator = F0Estimator::new(f0_config, config.device);
@@ -127,12 +160,16 @@ impl RVCInference {
             None
         };
 
-        // 加载模型权重
-        if model_path.as_ref().exists() {
-            println!("📁 正在加载模型: {:?}", model_path.as_ref());
-            // TODO: 实现模型加载逻辑
-            println!("⚠️  模型加载功能暂未完全实现，使用随机权重");
+        // 验证模型兼容性
+        let compatibility_warnings = model_loader.check_compatibility(&model_config, &config)?;
+        if !compatibility_warnings.is_empty() {
+            println!("⚠️  兼容性警告:");
+            for warning in &compatibility_warnings {
+                println!("   - {}", warning);
+            }
         }
+
+        println!("✅ RVC 推理引擎初始化完成");
 
         Ok(Self {
             config,
@@ -141,6 +178,8 @@ impl RVCInference {
             f0_estimator,
             index,
             vs,
+            model_config,
+            model_stats,
         })
     }
 
@@ -426,25 +465,89 @@ impl RVCInference {
 
     /// 获取推理统计信息
     pub fn get_inference_stats(&self) -> InferenceStats {
+        let (hubert_params, generator_params) = if let Some(stats) = &self.model_stats {
+            (stats.total_params / 2, stats.total_params / 2) // 简单分配
+        } else {
+            (
+                self.count_hubert_parameters(),
+                self.count_generator_parameters(),
+            )
+        };
+
         InferenceStats {
             device: format!("{:?}", self.config.device),
-            hubert_parameters: self.count_hubert_parameters(),
-            generator_parameters: self.count_generator_parameters(),
+            hubert_parameters: hubert_params as usize,
+            generator_parameters: generator_params as usize,
             has_index: self.index.is_some(),
             target_sample_rate: self.config.target_sample_rate,
         }
     }
 
+    /// 加载模型和配置
+    fn load_model_and_config(
+        loader: &ModelLoader,
+        model_path: &Path,
+        vs: &mut nn::VarStore,
+    ) -> Result<(ModelLoaderConfig, Option<ModelLoadStats>)> {
+        // 检查模型文件
+        crate::model_loader::utils::check_model_file(model_path)?;
+
+        // 尝试加载配置文件
+        let config_path = model_path.with_extension("json");
+        let model_config = if config_path.exists() {
+            println!("📄 发现配置文件: {:?}", config_path);
+            ModelLoader::load_config(&config_path)?
+        } else {
+            println!("⚠️  未找到配置文件，使用默认配置");
+            ModelLoaderConfig::default()
+        };
+
+        // 加载模型权重
+        let model_stats = match loader.load_pytorch_model(model_path, vs) {
+            Ok(stats) => {
+                println!("✅ 模型权重加载成功");
+
+                // 验证模型参数
+                let warnings = loader.validate_model_parameters(vs, &model_config)?;
+                if !warnings.is_empty() {
+                    println!("⚠️  模型验证警告:");
+                    for warning in warnings {
+                        println!("   - {}", warning);
+                    }
+                }
+
+                Some(stats)
+            }
+            Err(e) => {
+                println!("⚠️  模型权重加载失败: {}", e);
+                println!("📝 使用随机初始化权重继续运行");
+                None
+            }
+        };
+
+        Ok((model_config, model_stats))
+    }
+
     /// 统计 HuBERT 参数数量
-    fn count_hubert_parameters(&self) -> usize {
-        // 粗略估计，实际应该遍历所有参数
-        1000000 // 1M 参数的占位符
+    fn count_hubert_parameters(&self) -> i64 {
+        let mut count = 0i64;
+        for (name, tensor) in self.vs.variables() {
+            if name.contains("hubert") || name.contains("feature") || name.contains("encoder") {
+                count += tensor.size().iter().product::<i64>();
+            }
+        }
+        if count == 0 { 1000000 } else { count } // 默认值或实际值
     }
 
     /// 统计生成器参数数量
-    fn count_generator_parameters(&self) -> usize {
-        // 粗略估计，实际应该遍历所有参数
-        5000000 // 5M 参数的占位符
+    fn count_generator_parameters(&self) -> i64 {
+        let mut count = 0i64;
+        for (name, tensor) in self.vs.variables() {
+            if name.contains("conv") || name.contains("upsample") || name.contains("generator") {
+                count += tensor.size().iter().product::<i64>();
+            }
+        }
+        if count == 0 { 5000000 } else { count } // 默认值或实际值
     }
 }
 

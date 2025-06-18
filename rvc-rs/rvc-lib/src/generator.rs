@@ -80,7 +80,7 @@ impl ResidualBlock {
             };
 
             let conv1 = nn::conv1d(
-                vs / format!("convs1.{}", i),
+                vs / format!("convs1_{}", i),
                 channels,
                 channels,
                 kernel_size,
@@ -89,7 +89,7 @@ impl ResidualBlock {
             convs1.push(conv1);
 
             let conv2 = nn::conv1d(
-                vs / format!("convs2.{}", i),
+                vs / format!("convs2_{}", i),
                 channels,
                 channels,
                 kernel_size,
@@ -144,7 +144,7 @@ impl MRF {
 
         for (i, (&kernel_size, dilations)) in kernel_sizes.iter().zip(dilation_sizes).enumerate() {
             let resblock = ResidualBlock::new(
-                &(vs / format!("resblocks.{}", i)),
+                &(vs / format!("resblocks_{}", i)),
                 channels,
                 kernel_size,
                 dilations,
@@ -355,7 +355,7 @@ impl NSFHiFiGANGenerator {
             let output_dim = current_dim / 2;
 
             let upsample_block = UpsampleBlock::new(
-                &(vs / format!("upsample_blocks.{}", i)),
+                &(vs / format!("upsample_blocks_{}", i)),
                 current_dim,
                 output_dim,
                 kernel_size,
