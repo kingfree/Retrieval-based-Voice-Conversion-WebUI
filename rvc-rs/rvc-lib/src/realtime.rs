@@ -128,7 +128,24 @@ pub fn start_vc_with_callback(audio_callback: Option<AudioDataCallback>) -> Resu
                 // Measure inference time
                 let inference_start = Instant::now();
                 let mut rvc = rvc_in.lock().unwrap();
-                let mut processed = rvc.infer_simple(data).unwrap_or_else(|_| data.to_vec());
+
+                // Parameters for RVC::infer (matching Python implementation)
+                let block_frame_16k = data.len() * 16000 / selected.sample_rate as usize; // Convert to 16kHz frame size
+                let skip_head = 0; // Skip frames at the beginning
+                let return_length = block_frame_16k; // Return length in frames
+                let f0method = "harvest"; // Default F0 method, could be made configurable
+
+                let mut processed =
+                    match rvc.infer(data, block_frame_16k, skip_head, return_length, f0method) {
+                        Ok(result) => result,
+                        Err(e) => {
+                            eprintln!(
+                                "RVC inference failed: {}, falling back to original audio",
+                                e
+                            );
+                            data.to_vec()
+                        }
+                    };
                 let inference_time = inference_start.elapsed().as_secs_f32() * 1000.0; // Convert to ms
                 drop(rvc); // Release RVC lock early
 

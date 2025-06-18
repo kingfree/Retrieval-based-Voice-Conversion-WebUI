@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 realfft = "3.5"
 rsworld-sys = "0.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 cpal = { version = "0.16", default-features = false }
@@ -36,3 +36,7 @@ path = "../examples/test_complete_pipeline.rs"
 [[example]]
 name = "test_fix_verification"
 path = "../examples/test_fix_verification.rs"
+
+[[example]]
+name = "test_progress_logging"
+path = "../examples/test_progress_logging.rs"

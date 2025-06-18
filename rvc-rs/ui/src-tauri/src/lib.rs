@@ -17,7 +17,7 @@ pub struct VcState {
     pub audio_streaming: Arc<Mutex<bool>>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 struct AudioMetrics {
     inference_time: f32,
     total_processing_time: f32,
@@ -333,6 +333,26 @@ async fn start_voice_conversion(
             println!("🎤 Audio callback triggered! Input: {} samples, Output: {} samples, Inference: {:.2}ms, Total: {:.2}ms",
                 input_data.len(), output_data.len(), inference_time, total_time);
 
+            // Debug: Print first few samples of input data
+            if !input_data.is_empty() {
+                let preview_count = std::cmp::min(5, input_data.len());
+                println!(
+                    "🔍 Input data preview (first {} samples): {:?}",
+                    preview_count,
+                    &input_data[..preview_count]
+                );
+            }
+
+            // Debug: Print first few samples of output data
+            if !output_data.is_empty() {
+                let preview_count = std::cmp::min(5, output_data.len());
+                println!(
+                    "🔍 Output data preview (first {} samples): {:?}",
+                    preview_count,
+                    &output_data[..preview_count]
+                );
+            }
+
             // Calculate audio levels
             let input_level = if !input_data.is_empty() {
                 (input_data.iter().map(|x| x * x).sum::<f32>() / input_data.len() as f32).sqrt()
@@ -361,6 +381,7 @@ async fn start_voice_conversion(
                 output_level,
             };
 
+            println!("📈 Emitting audio_metrics: {:?}", metrics);
             match app_handle.emit("audio_metrics", &metrics) {
                 Ok(_) => println!("✅ Successfully emitted audio_metrics event"),
                 Err(e) => println!("❌ Failed to emit audio_metrics: {}", e),
@@ -368,13 +389,22 @@ async fn start_voice_conversion(
 
             // Send audio data for visualization (limit data size for performance)
             const MAX_SAMPLES: usize = 1024; // Limit to prevent UI lag
+            let input_samples: Vec<f32> = input_data.iter().take(MAX_SAMPLES).copied().collect();
+            let output_samples: Vec<f32> = output_data.iter().take(MAX_SAMPLES).copied().collect();
+
             let audio_data = AudioData {
-                input_data: input_data.iter().take(MAX_SAMPLES).copied().collect(),
-                output_data: output_data.iter().take(MAX_SAMPLES).copied().collect(),
+                input_data: input_samples.clone(),
+                output_data: output_samples.clone(),
                 sample_rate: 22050, // Default sample rate, could be made configurable
                 timestamp,
             };
 
+            println!(
+                "🎵 Emitting audio_data: input_len={}, output_len={}, sample_rate={}",
+                input_samples.len(),
+                output_samples.len(),
+                audio_data.sample_rate
+            );
             match app_handle.emit("audio_data", &audio_data) {
                 Ok(_) => println!("✅ Successfully emitted audio_data event"),
                 Err(e) => println!("❌ Failed to emit audio_data: {}", e),

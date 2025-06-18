@@ -48,17 +48,6 @@ pub use model_loader::{
     ModelLoadStats, ModelLoader,
 };
 
-mod inference;
-pub use inference::{
-    BatchInference, F0FilterConfig, InferenceConfig, InferenceStats, RVCInference,
-};
-
-mod audio_pipeline;
-pub use audio_pipeline::{
-    AudioPipeline, AudioPipelineConfig, AudioPostprocessingConfig, AudioPreprocessingConfig,
-    ProcessingProgress, ProcessingStage, ProgressCallback,
-};
-
 use std::f64::consts::PI;
 use tch::{IndexOp, Kind, Tensor};
 

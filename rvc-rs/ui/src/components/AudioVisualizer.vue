@@ -474,7 +474,18 @@ watch(
     () => props.audioData,
     (newData) => {
         try {
+            console.log(`🎨 AudioVisualizer (${props.title}) received data:`, {
+                hasData: !!newData,
+                dataLength: newData?.length || 0,
+                dataType: typeof newData,
+                isArray: Array.isArray(newData),
+                firstFewValues: newData?.slice(0, 3) || [],
+            });
+
             if (!newData || newData.length === 0) {
+                console.log(
+                    `🔇 AudioVisualizer (${props.title}) - No data, clearing buffers`,
+                );
                 audioBuffer = [];
                 frequencyData = [];
                 volumeLevel.value = -60;
@@ -486,18 +497,31 @@ watch(
                 throw new Error("Audio data must be an array");
             }
 
+            console.log(
+                `📊 AudioVisualizer (${props.title}) - Processing ${newData.length} samples`,
+            );
+
             // Update audio buffer
             audioBuffer = [...newData];
             if (audioBuffer.length > bufferSize) {
+                console.log(
+                    `🗂️ AudioVisualizer (${props.title}) - Trimming buffer from ${audioBuffer.length} to ${bufferSize}`,
+                );
                 audioBuffer = audioBuffer.slice(-bufferSize);
             }
 
             // Calculate frequency data
             frequencyData = calculateFrequencyData(audioBuffer);
+            console.log(
+                `📈 AudioVisualizer (${props.title}) - Generated ${frequencyData.length} frequency bins`,
+            );
 
             // Calculate volume level
             const newVolumeLevel = calculateVolumeLevel(audioBuffer);
             volumeLevel.value = newVolumeLevel;
+            console.log(
+                `🔊 AudioVisualizer (${props.title}) - Volume level: ${newVolumeLevel.toFixed(2)} dB`,
+            );
 
             // Update last update time
             lastUpdateTime.value = Date.now();
@@ -506,12 +530,18 @@ watch(
             if (hasError.value) {
                 hasError.value = false;
                 errorMessage.value = "";
+                console.log(
+                    `✅ AudioVisualizer (${props.title}) - Cleared previous error`,
+                );
             }
 
             // Emit level change
             emit("levelChange", newVolumeLevel);
         } catch (error) {
-            console.error("Error processing audio data:", error);
+            console.error(
+                `❌ AudioVisualizer (${props.title}) error processing audio data:`,
+                error,
+            );
             hasError.value = true;
             errorMessage.value = error.message;
             emit("error", error);

@@ -447,26 +447,21 @@ impl ModelLoader {
     pub fn check_compatibility(
         &self,
         model_config: &ModelConfig,
-        runtime_config: &crate::inference::InferenceConfig,
+        target_sample_rate: u32,
     ) -> Result<Vec<String>> {
         let mut warnings = Vec::new();
 
         // 检查采样率兼容性
-        if model_config.sample_rate != runtime_config.target_sample_rate {
+        if model_config.sample_rate != target_sample_rate as i64 {
             warnings.push(format!(
                 "采样率不匹配: 模型 {}Hz vs 运行时 {}Hz",
-                model_config.sample_rate, runtime_config.target_sample_rate
+                model_config.sample_rate, target_sample_rate
             ));
         }
 
-        // 检查设备兼容性
-        match runtime_config.device {
-            tch::Device::Cuda(_) => {
-                if !tch::Cuda::is_available() {
-                    warnings.push("请求使用 CUDA 但 CUDA 不可用".to_string());
-                }
-            }
-            _ => {}
+        // 检查设备兼容性 - 简化版本，不依赖 runtime_config
+        if !tch::Cuda::is_available() {
+            warnings.push("CUDA 不可用，将使用 CPU 进行推理".to_string());
         }
 
         // 检查内存需求

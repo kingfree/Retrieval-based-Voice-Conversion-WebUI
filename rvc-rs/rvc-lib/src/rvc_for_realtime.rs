@@ -5,7 +5,7 @@ use crate::{FaissIndex, GUIConfig, Harvest, ModelConfig, PyTorchModelLoader};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tch::{Device, IndexOp, Kind, Tensor, nn};
 
 /// Audio callback function type for real-time processing
@@ -474,66 +474,101 @@ impl RVC {
         f0method: &str,
     ) -> Result<Vec<f32>, String> {
         let t1 = Instant::now();
-        println!("🎤 Starting RVC inference...");
+        let input_duration = input_wav.len() as f32 / 16000.0;
+
+        println!("🎤 开始 RVC 实时推理...");
         println!(
-            "  Input length: {} samples ({:.2}s)",
+            "  输入长度: {} 样本 ({:.2}s)",
             input_wav.len(),
-            input_wav.len() as f32 / 16000.0
+            input_duration
         );
-        println!("  F0 method: {}", f0method);
+        println!("  F0 方法: {}", f0method);
 
         // Convert input to tensor
         let input_tensor = Tensor::from_slice(input_wav).to_device(self.device);
 
         // Step 1: Feature extraction using HuBERT
-        println!("🧠 Extracting HuBERT features...");
-        let feats = self.extract_features(&input_tensor)?;
+        println!("🧠 提取 HuBERT 特征...");
+        let feats = self.extract_features_with_progress(&input_tensor, input_duration)?;
         let t2 = Instant::now();
-        println!("  Features shape: {:?}", feats.size());
+        println!("  特征形状: {:?}", feats.size());
 
         // Step 2: Index search (if enabled)
-        println!("🔍 Applying index search...");
-        let feats = self.apply_index_search(feats, skip_head)?;
+        println!("🔍 应用索引搜索...");
+        let feats = self.apply_index_search_with_progress(feats, skip_head, input_duration)?;
         let t3 = Instant::now();
 
         // Step 3: F0 extraction and processing
         let p_len = input_wav.len() / 160; // Frame length for 16kHz
-        println!("🎵 Processing F0 (p_len: {})...", p_len);
+        println!("🎵 处理 F0 (p_len: {})...", p_len);
         let (cache_pitch, cache_pitchf) = if self.if_f0 == 1 {
-            self.process_f0(input_wav, block_frame_16k, p_len, f0method)?
+            self.process_f0_with_progress(
+                input_wav,
+                block_frame_16k,
+                p_len,
+                f0method,
+                input_duration,
+            )?
         } else {
-            println!("  F0 processing skipped (non-F0 model)");
+            println!("  F0 处理跳过 (非 F0 模型)");
             (None, None)
         };
         let t4 = Instant::now();
 
         // Step 4: Generator inference
-        println!("🎼 Running generator inference...");
-        let infered_audio = self.run_generator_inference(
+        println!("🎼 运行生成器推理...");
+        let infered_audio = self.run_generator_inference_with_progress(
             feats,
             p_len,
             cache_pitch,
             cache_pitchf,
             skip_head,
             return_length,
+            input_duration,
         )?;
         let t5 = Instant::now();
 
         // Print timing information
         let total_time = (t5 - t1).as_secs_f32();
-        let real_time_factor = input_wav.len() as f32 / 16000.0 / total_time;
+        let real_time_factor = input_duration / total_time;
 
-        println!("✅ RVC inference completed!");
-        println!("Timing breakdown:");
-        println!("  Features: {:.3}s", (t2 - t1).as_secs_f32());
-        println!("  Index:    {:.3}s", (t3 - t2).as_secs_f32());
-        println!("  F0:       {:.3}s", (t4 - t3).as_secs_f32());
-        println!("  Generator:{:.3}s", (t5 - t4).as_secs_f32());
-        println!("  Total:    {:.3}s", total_time);
-        println!("  Real-time factor: {:.1}x", real_time_factor);
-        println!("  Output length: {} samples", infered_audio.len());
+        println!("✅ RVC 推理完成!");
+        println!("时间统计:");
+        println!("  特征提取: {:.3}s", (t2 - t1).as_secs_f32());
+        println!("  索引搜索: {:.3}s", (t3 - t2).as_secs_f32());
+        println!("  F0 处理:  {:.3}s", (t4 - t3).as_secs_f32());
+        println!("  生成器:   {:.3}s", (t5 - t4).as_secs_f32());
+        println!("  总计:     {:.3}s", total_time);
+        println!("  实时倍率: {:.1}x", real_time_factor);
+        println!("  输出长度: {} 样本", infered_audio.len());
 
         Ok(infered_audio)
+    }
+
+    /// Extract features using HuBERT model with progress logging
+    fn extract_features_with_progress(
+        &self,
+        input_wav: &Tensor,
+        _duration: f32,
+    ) -> Result<Tensor, String> {
+        let start_time = Instant::now();
+
+        // Start progress logging in a separate thread
+        let _progress_handle = std::thread::spawn(move || {
+            let start = Instant::now();
+            loop {
+                std::thread::sleep(Duration::from_secs(1));
+                let elapsed = start.elapsed().as_secs_f32();
+                println!("   ⏱️  HuBERT 特征提取进行中... ({:.1}s)", elapsed);
+            }
+        });
+
+        let result = self.extract_features(input_wav);
+
+        let elapsed = start_time.elapsed().as_secs_f32();
+        println!("✅ HuBERT 特征提取完成 (耗时: {:.2}s)", elapsed);
+
+        result
     }
 
     /// Extract features using HuBERT model
@@ -585,15 +620,49 @@ impl RVC {
         }
     }
 
+    /// Apply index search for feature enhancement with progress logging
+    fn apply_index_search_with_progress(
+        &self,
+        feats: Tensor,
+        skip_head: usize,
+        _duration: f32,
+    ) -> Result<Tensor, String> {
+        let start_time = Instant::now();
+
+        if self.index_rate <= 0.0 || self.faiss_index.is_none() {
+            println!("索引搜索禁用或不可用");
+            return Ok(feats);
+        }
+
+        // Start progress logging for longer operations
+        if _duration > 2.0 {
+            let _progress_handle = std::thread::spawn(move || {
+                let start = Instant::now();
+                loop {
+                    std::thread::sleep(Duration::from_secs(1));
+                    let elapsed = start.elapsed().as_secs_f32();
+                    println!("   ⏱️  索引搜索进行中... ({:.1}s)", elapsed);
+                }
+            });
+        }
+
+        let result = self.apply_index_search(feats, skip_head);
+
+        let elapsed = start_time.elapsed().as_secs_f32();
+        if elapsed > 0.1 {
+            println!("✅ 索引搜索完成 (耗时: {:.2}s)", elapsed);
+        }
+
+        result
+    }
+
     /// Apply index search for feature enhancement
     fn apply_index_search(&self, feats: Tensor, skip_head: usize) -> Result<Tensor, String> {
         if self.index_rate <= 0.0 || self.faiss_index.is_none() {
-            println!("Index search disabled or not available");
             return Ok(feats);
         }
 
         let index = self.faiss_index.as_ref().unwrap();
-        println!("Applying FAISS index search with rate: {}", self.index_rate);
 
         // Get tensor shape before moving it
         let feats_shape = feats.size();
@@ -688,7 +757,40 @@ impl RVC {
         Ok(enhanced_feats)
     }
 
-    /// Process F0 (fundamental frequency) for pitch control
+    /// Process F0 with progress logging
+    fn process_f0_with_progress(
+        &mut self,
+        input_wav: &[f32],
+        block_frame_16k: usize,
+        p_len: usize,
+        f0method: &str,
+        duration: f32,
+    ) -> Result<(Option<Tensor>, Option<Tensor>), String> {
+        let start_time = Instant::now();
+
+        // Start progress logging for longer operations
+        if duration > 1.0 {
+            let _progress_handle = std::thread::spawn(move || {
+                let start = Instant::now();
+                loop {
+                    std::thread::sleep(Duration::from_secs(1));
+                    let elapsed = start.elapsed().as_secs_f32();
+                    println!("   ⏱️  F0 处理进行中... ({:.1}s)", elapsed);
+                }
+            });
+        }
+
+        let result = self.process_f0(input_wav, block_frame_16k, p_len, f0method);
+
+        let elapsed = start_time.elapsed().as_secs_f32();
+        if elapsed > 0.1 {
+            println!("✅ F0 处理完成 (耗时: {:.2}s)", elapsed);
+        }
+
+        result
+    }
+
+    /// Process F0 (fundamental frequency) for voice conversion
     fn process_f0(
         &mut self,
         input_wav: &[f32],
@@ -883,6 +985,46 @@ impl RVC {
         } else {
             0.0
         }
+    }
+
+    /// Run generator model inference with progress logging
+    fn run_generator_inference_with_progress(
+        &self,
+        feats: Tensor,
+        p_len: usize,
+        cache_pitch: Option<Tensor>,
+        cache_pitchf: Option<Tensor>,
+        skip_head: usize,
+        return_length: usize,
+        _duration: f32,
+    ) -> Result<Vec<f32>, String> {
+        let start_time = Instant::now();
+
+        // Start progress logging for longer operations
+        if _duration > 1.0 {
+            let _progress_handle = std::thread::spawn(move || {
+                let start = Instant::now();
+                loop {
+                    std::thread::sleep(Duration::from_secs(1));
+                    let elapsed = start.elapsed().as_secs_f32();
+                    println!("   ⏱️  生成器推理进行中... ({:.1}s)", elapsed);
+                }
+            });
+        }
+
+        let result = self.run_generator_inference(
+            feats,
+            p_len,
+            cache_pitch,
+            cache_pitchf,
+            skip_head,
+            return_length,
+        );
+
+        let elapsed = start_time.elapsed().as_secs_f32();
+        println!("✅ 生成器推理完成 (耗时: {:.2}s)", elapsed);
+
+        result
     }
 
     /// Run generator model inference

@@ -49,30 +49,56 @@ export function useAudioStream() {
       // Listen for audio data (both input and output)
       unlistenInputAudio = await listen("audio_data", (event) => {
         try {
+          console.log("🎵 Raw audio_data event received:", event);
           const { input_data, output_data, sample_rate } = event.payload;
           console.log("🎵 Received audio_data event:", {
             input_length: input_data?.length || 0,
             output_length: output_data?.length || 0,
             sample_rate,
+            payload_keys: Object.keys(event.payload || {}),
           });
 
           if (input_data && Array.isArray(input_data)) {
+            console.log(
+              "🔍 Input data preview (first 5):",
+              input_data.slice(0, 5),
+            );
             updateInputBuffer(input_data);
             calculateInputVolume(input_data);
             inputAudioData.value = input_data;
             console.log(
               "📊 Input audio data updated, length:",
               input_data.length,
+              "current inputAudioData.value length:",
+              inputAudioData.value?.length,
+            );
+          } else {
+            console.warn(
+              "❌ Invalid input_data:",
+              typeof input_data,
+              input_data,
             );
           }
 
           if (output_data && Array.isArray(output_data)) {
+            console.log(
+              "🔍 Output data preview (first 5):",
+              output_data.slice(0, 5),
+            );
             updateOutputBuffer(output_data);
             calculateOutputVolume(output_data);
             outputAudioData.value = output_data;
             console.log(
               "📊 Output audio data updated, length:",
               output_data.length,
+              "current outputAudioData.value length:",
+              outputAudioData.value?.length,
+            );
+          } else {
+            console.warn(
+              "❌ Invalid output_data:",
+              typeof output_data,
+              output_data,
             );
           }
 
@@ -89,6 +115,7 @@ export function useAudioStream() {
       // Listen for audio metrics/performance data
       unlistenOutputAudio = await listen("audio_metrics", (event) => {
         try {
+          console.log("📈 Raw audio_metrics event received:", event);
           const {
             inference_time,
             total_processing_time,
@@ -103,6 +130,7 @@ export function useAudioStream() {
             input_level,
             output_level,
             timestamp,
+            payload_keys: Object.keys(event.payload || {}),
           });
 
           // Update performance metrics
@@ -127,7 +155,13 @@ export function useAudioStream() {
               20 * Math.log10(Math.max(input_level, 1e-6)),
             );
             inputVolume.value = inputVolumeDb;
-            console.log("🔊 Input volume updated:", inputVolumeDb, "dB");
+            console.log(
+              "🔊 Input volume updated:",
+              inputVolumeDb,
+              "dB",
+              "from level:",
+              input_level,
+            );
           }
           if (output_level !== undefined) {
             const outputVolumeDb = Math.max(
@@ -135,7 +169,13 @@ export function useAudioStream() {
               20 * Math.log10(Math.max(output_level, 1e-6)),
             );
             outputVolume.value = outputVolumeDb;
-            console.log("🔊 Output volume updated:", outputVolumeDb, "dB");
+            console.log(
+              "🔊 Output volume updated:",
+              outputVolumeDb,
+              "dB",
+              "from level:",
+              output_level,
+            );
           }
         } catch (error) {
           console.error("❌ Error processing audio metrics:", error);
@@ -198,7 +238,8 @@ export function useAudioStream() {
         connectionStatus.value = "error";
       });
 
-      console.log("Audio stream listeners initialized successfully");
+      console.log("✅ Audio stream listeners initialized successfully");
+      console.log("🔗 Connection status set to connected");
       connectionStatus.value = "connected";
     } catch (error) {
       console.error("Failed to initialize audio stream:", error);
@@ -211,21 +252,27 @@ export function useAudioStream() {
   const updateInputBuffer = (samples) => {
     try {
       if (!Array.isArray(samples) || samples.length === 0) {
-        console.warn("Invalid input buffer samples:", samples);
+        console.warn("❌ Invalid input buffer samples:", samples);
         return;
       }
 
+      console.log("📥 Updating input buffer with", samples.length, "samples");
       inputBuffer.push(...samples);
 
       // Keep buffer size manageable
       if (inputBuffer.length > maxBufferSize) {
+        const oldLength = inputBuffer.length;
         inputBuffer = inputBuffer.slice(-maxBufferSize);
+        console.log(
+          `🗂️ Input buffer trimmed from ${oldLength} to ${inputBuffer.length} samples`,
+        );
       }
 
       // Update reactive data
       inputAudioData.value = [...inputBuffer];
+      console.log("✅ Input buffer updated, total length:", inputBuffer.length);
     } catch (error) {
-      console.error("Error updating input buffer:", error);
+      console.error("❌ Error updating input buffer:", error);
       lastError.value = error.message;
     }
   };
@@ -233,21 +280,30 @@ export function useAudioStream() {
   const updateOutputBuffer = (samples) => {
     try {
       if (!Array.isArray(samples) || samples.length === 0) {
-        console.warn("Invalid output buffer samples:", samples);
+        console.warn("❌ Invalid output buffer samples:", samples);
         return;
       }
 
+      console.log("📥 Updating output buffer with", samples.length, "samples");
       outputBuffer.push(...samples);
 
       // Keep buffer size manageable
       if (outputBuffer.length > maxBufferSize) {
+        const oldLength = outputBuffer.length;
         outputBuffer = outputBuffer.slice(-maxBufferSize);
+        console.log(
+          `🗂️ Output buffer trimmed from ${oldLength} to ${outputBuffer.length} samples`,
+        );
       }
 
       // Update reactive data
       outputAudioData.value = [...outputBuffer];
+      console.log(
+        "✅ Output buffer updated, total length:",
+        outputBuffer.length,
+      );
     } catch (error) {
-      console.error("Error updating output buffer:", error);
+      console.error("❌ Error updating output buffer:", error);
       lastError.value = error.message;
     }
   };
