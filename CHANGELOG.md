@@ -1,4 +1,14 @@
 # CHANGELOG
+## [0.4.0] - 2025-06-18
+
+### Changed
+- Documented methods for each class in `AGENTS.md` Python Code Index
+
+
+## [0.3.0] - 2024-12-19
+
+### Added
+- Documented Python code index in `AGENTS.md` to ease future refactoring
 
 ## [0.2.0] - 2024-12-19
 
