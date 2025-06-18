@@ -1,0 +1,56 @@
+{
+  "generator": "RealRVCTestGenerator",
+  "timestamp": "2025-06-18 18:24:44",
+  "version": "1.0",
+  "model_info": {
+    "model_path": "assets/weights/kikiV1.pth",
+    "index_path": "logs/kikiV1.index",
+    "hubert_path": "assets/hubert/hubert_base.pt"
+  },
+  "audio_files": {
+    "input": "test.wav",
+    "output": "test_kikiV1_real_ref.wav"
+  },
+  "sample_rate": 16000,
+  "inference_parameters": {
+    "pitch": 0.0,
+    "formant": 0.0,
+    "index_rate": 0.75,
+    "f0method": "rmvpe",
+    "block_frame_16k": 4000,
+    "skip_head": 1600,
+    "return_length": 2400
+  },
+  "input_stats": {
+    "length": 125611,
+    "duration": 7.8506875,
+    "min_value": -0.20550456643104553,
+    "max_value": 0.148659810423851,
+    "rms": 0.013793213292956352,
+    "mean": -4.123311009607278e-05,
+    "std": 0.013793151825666428
+  },
+  "output_stats": {
+    "length": 125611,
+    "duration": 7.8506875,
+    "min_value": -0.8,
+    "max_value": 0.7276103376562058,
+    "rms": 0.09673174560019798,
+    "mean": -0.00025583044343154617,
+    "std": 0.09673140729693556
+  },
+  "environment": {
+    "python_version": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 12:55:12) [Clang 14.0.6 ]",
+    "numpy_version": "1.26.4",
+    "torch_available": true,
+    "fairseq_available": false,
+    "faiss_available": false,
+    "librosa_available": true,
+    "soundfile_available": true
+  },
+  "quality_metrics": {
+    "correlation": 0.003773675587271499,
+    "snr_estimate": -0.08282494468741448,
+    "length_ratio": 1.0
+  }
+}

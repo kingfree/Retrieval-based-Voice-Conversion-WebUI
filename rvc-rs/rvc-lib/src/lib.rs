@@ -22,6 +22,12 @@ pub use audio_utils::{
     create_white_noise, load_wav_simple, mix_audio, save_wav_simple,
 };
 
+mod pytorch_loader;
+pub use pytorch_loader::{ModelConfig, ModelSummary, PyTorchModelLoader, RVCVersion};
+
+mod faiss_index;
+pub use faiss_index::{FaissIndex, IndexInfo, IndexType, MetricType, SearchResult};
+
 use std::f64::consts::PI;
 use tch::{IndexOp, Kind, Tensor};
 

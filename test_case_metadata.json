@@ -1,6 +1,6 @@
 {
   "generator": "SimpleTestCaseGenerator",
-  "timestamp": "2025-06-18 18:15:30",
+  "timestamp": "2025-06-18 18:42:28",
   "model_path": "assets/weights/kikiV1.pth",
   "index_path": "logs/kikiV1.index",
   "input_audio_file": "test.wav",
@@ -24,9 +24,9 @@
     "length": 376832,
     "duration": 7.850666666666666,
     "min_value": -0.8,
-    "max_value": 0.6318076863050727,
-    "rms": 0.06346948447798259,
-    "mean": -0.0001370595015847905
+    "max_value": 0.6298512961658361,
+    "rms": 0.06381781563700707,
+    "mean": -0.00015071754556133466
   },
   "processing_info": {
     "synthetic_data": true,
