@@ -14,6 +14,7 @@
                             {{ getConnectionStatusText() }}
                         </span>
                     </div>
+
                     <button
                         class="settings-toggle"
                         @click="toggleSettings"
@@ -46,6 +47,17 @@
                     />
                 </svg>
                 <span class="notification-text">{{ errorMessage }}</span>
+                <button
+                    class="notification-copy"
+                    @click.stop="copyError"
+                    title="复制错误信息"
+                >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                        />
+                    </svg>
+                </button>
                 <button class="notification-close" @click.stop="clearError">
                     ×
                 </button>
@@ -65,6 +77,17 @@
                     />
                 </svg>
                 <span class="notification-text">{{ successMessage }}</span>
+                <button
+                    class="notification-copy"
+                    @click.stop="copySuccess"
+                    title="复制成功信息"
+                >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"
+                        />
+                    </svg>
+                </button>
                 <button class="notification-close" @click.stop="clearSuccess">
                     ×
                 </button>
@@ -78,26 +101,50 @@
                 <!-- Control Panel -->
                 <div class="control-panel">
                     <div class="main-controls">
-                        <button
-                            class="control-btn start-btn"
-                            @click="startVc"
-                            :disabled="!canStartVc"
-                        >
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-                            </svg>
-                            开始转换
-                        </button>
-                        <button
-                            class="control-btn stop-btn"
-                            @click="stopVc"
-                            :disabled="!isStreaming"
-                        >
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18,18H6V6H18V18Z" />
-                            </svg>
-                            停止转换
-                        </button>
+                        <div class="control-section">
+                            <h3>语音转换控制</h3>
+                            <div class="status-indicator">
+                                <div
+                                    class="status-light"
+                                    :class="{ active: isRunning }"
+                                ></div>
+                                <span class="status-text">
+                                    {{ isRunning ? "转换中..." : "就绪" }}
+                                </span>
+                            </div>
+                            <div class="control-buttons">
+                                <button
+                                    class="control-btn start-btn"
+                                    @click="startVc"
+                                    :disabled="!canStartVc"
+                                    :class="{ pulse: isRunning }"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                    >
+                                        <path
+                                            d="M8,5.14V19.14L19,12.14L8,5.14Z"
+                                        />
+                                    </svg>
+                                    {{ isRunning ? "转换中" : "开始转换" }}
+                                </button>
+
+                                <button
+                                    class="control-btn stop-btn"
+                                    @click="stopVc"
+                                    :disabled="!canStopVc"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                    >
+                                        <path d="M18,18H6V6H18V18Z" />
+                                    </svg>
+                                    停止转换
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mode-selector">
@@ -245,27 +292,53 @@
                     <div class="form-group">
                         <label>PTH 模型文件</label>
                         <input
-                            type="file"
-                            accept=".pth"
-                            @change="
-                                (e) => (pth = e.target.files[0]?.name || '')
-                            "
+                            v-model="pth"
+                            type="text"
+                            placeholder="请输入模型文件路径 (如: assets/weights/kikiV1.pth)"
                             class="file-input"
                         />
-                        <span v-if="pth" class="file-name">{{ pth }}</span>
+                        <div class="file-hint">
+                            常见路径: assets/weights/kikiV1.pth 或完整的绝对路径
+                        </div>
+                        <div class="path-suggestions">
+                            <button
+                                @click="pth = 'assets/weights/kikiV1.pth'"
+                                class="suggestion-btn"
+                                type="button"
+                            >
+                                使用默认模型
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label>Index 文件</label>
                         <input
-                            type="file"
-                            accept=".index"
-                            @change="
-                                (e) => (index = e.target.files[0]?.name || '')
-                            "
+                            v-model="index"
+                            type="text"
+                            placeholder="请输入索引文件路径 (可选)"
                             class="file-input"
                         />
-                        <span v-if="index" class="file-name">{{ index }}</span>
+                        <div class="file-hint">
+                            可选：输入 .index 文件路径以提高音色相似度，如:
+                            logs/kikiV1.index
+                        </div>
+                        <div class="path-suggestions">
+                            <button
+                                @click="index = 'logs/kikiV1.index'"
+                                class="suggestion-btn"
+                                type="button"
+                            >
+                                使用默认索引
+                            </button>
+                            <button
+                                @click="index = ''"
+                                class="suggestion-btn secondary"
+                                type="button"
+                            >
+                                不使用索引
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -522,16 +595,17 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+// import { open } from "@tauri-apps/plugin-dialog";
 import AudioVisualizer from "./components/AudioVisualizer.vue";
 import PerformanceMonitor from "./components/PerformanceMonitor.vue";
 import { useAudioStream } from "./composables/useAudioStream.js";
 
 // UI State
 const showSettings = ref(false);
-const showVisualizations = ref(false); // 默认收起可视化器
+const showVisualizations = ref(false);
 const activeTab = ref("model");
 
 const settingsTabs = [
@@ -547,8 +621,8 @@ const f0Methods = ["pm", "harvest", "crepe", "rmvpe", "fcpe"];
 const hostapis = ref([]);
 const inputDevices = ref([]);
 const outputDevices = ref([]);
-const pth = ref("assets/weights/kikiV1.pth");
-const index = ref("logs/kikiV1.index");
+const pth = ref("");
+const index = ref("");
 const hostapi = ref("");
 const wasapiExclusive = ref(false);
 const inputDevice = ref("");
@@ -595,8 +669,13 @@ const {
     bufferLatency,
     totalLatency,
     initializeAudioStream,
+    stopAudioStream,
     clearBuffers,
 } = useAudioStream();
+
+// Voice conversion state
+const isRunning = ref(false);
+const statusCheckInterval = ref(null);
 
 // Audio visualizer component refs
 const inputVisualizer = ref(null);
@@ -605,12 +684,16 @@ const outputVisualizer = ref(null);
 // Computed properties
 const canStartVc = computed(() => {
     return (
+        !isRunning.value &&
         pth.value &&
-        index.value &&
         hostapi.value &&
         inputDevice.value &&
         outputDevice.value
     );
+});
+
+const canStopVc = computed(() => {
+    return isRunning.value;
 });
 
 // Methods
@@ -623,71 +706,125 @@ function toggleVisualizations() {
 }
 
 function send(event, value) {
-    invoke("event_handler", { event, value: value?.toString() });
+    try {
+        console.log("📤 Sending event:", event, "with value:", value);
+        invoke("event_handler", {
+            event,
+            value: value?.toString() || "",
+        }).catch((e) => {
+            console.error("❌ Failed to send event:", event, e);
+        });
+    } catch (e) {
+        console.error("❌ Error preparing event:", event, e);
+    }
 }
 
 async function fetchDevices() {
     try {
-        const list = await invoke("update_devices", { hostapi: hostapi.value });
-        hostapis.value = list.hostapis;
-        inputDevices.value = list.input_devices;
-        outputDevices.value = list.output_devices;
+        console.log("🔍 Fetching device information...");
+        const list = await invoke("get_device_info", {
+            hostapi: hostapi.value,
+        });
+
+        if (!list || typeof list !== "object") {
+            throw new Error("Invalid device information received");
+        }
+
+        hostapis.value = list.hostapis || [];
+        inputDevices.value = list.input_devices || [];
+        outputDevices.value = list.output_devices || [];
+
+        // Validate and fallback for hostapi
         if (!hostapis.value.includes(hostapi.value)) {
             hostapi.value = hostapis.value[0] || "";
+            console.log("🔧 Hostapi reset to:", hostapi.value);
         }
+
+        // Validate and fallback for input device
         if (!inputDevices.value.includes(inputDevice.value)) {
             inputDevice.value = inputDevices.value[0] || "";
+            console.log("🎤 Input device reset to:", inputDevice.value);
         }
+
+        // Validate and fallback for output device
         if (!outputDevices.value.includes(outputDevice.value)) {
             outputDevice.value = outputDevices.value[0] || "";
+            console.log("🔊 Output device reset to:", outputDevice.value);
         }
+
+        console.log("✅ Device information updated successfully");
     } catch (e) {
-        console.error("failed to fetch devices", e);
+        console.error("❌ Failed to fetch devices:", e);
+        showError(`获取设备信息失败: ${e.message || e}`);
+
+        // Provide fallback empty arrays to prevent UI errors
+        hostapis.value = [];
+        inputDevices.value = [];
+        outputDevices.value = [];
     }
 }
 
 async function applyDevices() {
     try {
-        sampleRate.value = await invoke("set_devices", {
+        console.log("🔧 Applying device settings...", {
             hostapi: hostapi.value,
             inputDevice: inputDevice.value,
             outputDevice: outputDevice.value,
         });
+
+        const result = await invoke("set_audio_devices", {
+            hostapi: hostapi.value,
+            inputDevice: inputDevice.value,
+            outputDevice: outputDevice.value,
+        });
+
+        if (typeof result === "number" && result > 0) {
+            sampleRate.value = result;
+            console.log(
+                "✅ Audio devices applied successfully, sample rate:",
+                result,
+            );
+        } else {
+            console.warn("⚠️ Unexpected sample rate result:", result);
+            sampleRate.value = 44100; // fallback
+        }
     } catch (e) {
-        console.error("failed to apply devices", e);
+        console.error("❌ Failed to apply devices:", e);
+        showError(`应用设备设置失败: ${e.message || e}`);
+        sampleRate.value = 44100; // fallback
     }
 }
 
 async function loadConfig() {
     try {
-        const config = await invoke("load_config");
+        const config = await invoke("get_init_config");
 
         // Apply loaded configuration with better defaults
-        pth.value = config.pth || "assets/weights/kikiV1.pth";
-        index.value = config.index || "logs/kikiV1.index";
-        hostapi.value = config.hostapi || "";
-        wasapiExclusive.value = config.wasapiExclusive || false;
-        inputDevice.value = config.inputDevice || "";
-        outputDevice.value = config.outputDevice || "";
-        srType.value = config.srType || "sr_model";
+        pth.value = config.pth_path || "";
+        index.value = config.index_path || "";
+        hostapi.value = config.sg_hostapi || "";
+        wasapiExclusive.value = config.sg_wasapi_exclusive || false;
+        inputDevice.value = config.sg_input_device || "";
+        outputDevice.value = config.sg_output_device || "";
+        srType.value = config.sr_type || "sr_model";
 
         // Processing parameters with better defaults
         threshold.value = config.threshold ?? -60;
         pitch.value = config.pitch ?? 0;
         formant.value = config.formant ?? 0.0;
-        indexRate.value = config.indexRate ?? 0.75;
-        rmsMixRate.value = config.rmsMixRate ?? 0.25;
+        indexRate.value = config.index_rate ?? 0.75;
+        rmsMixRate.value = config.rms_mix_rate ?? 0.25;
         f0method.value = config.f0method || "fcpe";
 
         // Performance parameters with better defaults
-        blockTime.value = config.blockTime ?? 0.25;
-        crossfadeLength.value = config.crossfadeLength ?? 0.05;
-        nCpu.value = config.nCpu ?? 2;
-        extraTime.value = config.extraTime ?? 2.5;
-        iNoiseReduce.value = config.iNoiseReduce ?? true;
-        oNoiseReduce.value = config.oNoiseReduce ?? true;
-        usePv.value = config.usePv ?? false;
-        functionMode.value = config.functionMode || "vc";
+        blockTime.value = config.block_time ?? 0.25;
+        crossfadeLength.value = config.crossfade_length ?? 0.05;
+        nCpu.value = config.n_cpu ?? 2;
+        extraTime.value = config.extra_time ?? 2.5;
+        iNoiseReduce.value = config.i_noise_reduce ?? true;
+        oNoiseReduce.value = config.o_noise_reduce ?? true;
+        usePv.value = config.use_pv ?? false;
+        functionMode.value = "vc"; // not stored in backend config
 
         console.log("✅ Configuration loaded successfully");
         showSuccess("配置加载成功");
@@ -709,6 +846,18 @@ async function startVc() {
 
     try {
         console.log("🚀 Starting voice conversion...");
+
+        // Validate required files
+        if (!pth.value) {
+            showError("请先输入模型文件路径 (.pth)");
+            return;
+        }
+
+        // Validate file extensions
+        if (!validateModelPath() || !validateIndexPath()) {
+            return;
+        }
+
         console.log("📋 Configuration:", {
             pth: pth.value,
             index: index.value,
@@ -723,7 +872,7 @@ async function startVc() {
         // Save current configuration before starting
         await saveConfig();
 
-        await invoke("start_vc", {
+        await invoke("start_voice_conversion", {
             pth: pth.value,
             index: index.value,
             hostapi: hostapi.value,
@@ -744,63 +893,96 @@ async function startVc() {
             iNoiseReduce: iNoiseReduce.value,
             oNoiseReduce: oNoiseReduce.value,
             usePv: usePv.value,
-            functionMode: functionMode.value,
         });
 
-        await initializeAudioStream();
+        // Initialize audio stream first
+        try {
+            await initializeAudioStream();
+            console.log("🎧 Audio stream initialized successfully");
+        } catch (streamError) {
+            console.warn(
+                "⚠️ Audio stream initialization failed, continuing without visualization:",
+                streamError,
+            );
+        }
+
+        // Start status checking
+        startStatusChecking();
+
         console.log("✅ Voice conversion started successfully");
         showSuccess("语音转换启动成功");
     } catch (e) {
         console.error("❌ Failed to start voice conversion:", e);
         showError(`启动语音转换失败: ${e.message || e}`);
+        // Check status after error to sync state
+        await checkStatus();
     }
 }
 
 async function stopVc() {
     try {
         console.log("🛑 Stopping voice conversion...");
-        await invoke("stop_vc");
+
+        // Stop audio stream first
+        try {
+            await stopAudioStream();
+            console.log("🎧 Audio stream stopped");
+        } catch (streamError) {
+            console.warn("⚠️ Error stopping audio stream:", streamError);
+        }
+
+        // Stop voice conversion
+        await invoke("stop_voice_conversion");
+
+        // Clean up
         clearBuffers();
+        stopStatusChecking();
+
         console.log("✅ Voice conversion stopped successfully");
         showSuccess("语音转换已停止");
     } catch (e) {
         console.error("❌ Failed to stop voice conversion:", e);
         showError(`停止语音转换失败: ${e.message || e}`);
+    } finally {
+        // Always check status after stop attempt
+        setTimeout(async () => {
+            await checkStatus();
+        }, 500);
     }
 }
 
 // Save configuration function
 async function saveConfig() {
     try {
+        console.log("💾 Saving configuration...");
         const config = {
-            pth: pth.value,
-            index: index.value,
-            hostapi: hostapi.value,
-            wasapiExclusive: wasapiExclusive.value,
-            inputDevice: inputDevice.value,
-            outputDevice: outputDevice.value,
-            srType: srType.value,
-            threshold: threshold.value,
-            pitch: pitch.value,
-            formant: formant.value,
-            indexRate: indexRate.value,
-            rmsMixRate: rmsMixRate.value,
-            f0method: f0method.value,
-            blockTime: blockTime.value,
-            crossfadeLength: crossfadeLength.value,
-            nCpu: nCpu.value,
-            extraTime: extraTime.value,
-            iNoiseReduce: iNoiseReduce.value,
-            oNoiseReduce: oNoiseReduce.value,
-            usePv: usePv.value,
-            functionMode: functionMode.value,
+            pth_path: pth.value || "",
+            index_path: index.value || "",
+            sg_hostapi: hostapi.value || "",
+            sg_wasapi_exclusive: wasapiExclusive.value || false,
+            sg_input_device: inputDevice.value || "",
+            sg_output_device: outputDevice.value || "",
+            sr_type: srType.value || "sr_model",
+            threhold: threshold.value || -40,
+            pitch: pitch.value || 0,
+            formant: formant.value || 0,
+            index_rate: indexRate.value || 0.5,
+            rms_mix_rate: rmsMixRate.value || 0.25,
+            block_time: blockTime.value || 0.25,
+            crossfade_length: crossfadeLength.value || 0.04,
+            extra_time: extraTime.value || 2.5,
+            n_cpu: nCpu.value || 4,
+            f0method: f0method.value || "rmvpe",
+            i_noise_reduce: iNoiseReduce.value || false,
+            o_noise_reduce: oNoiseReduce.value || false,
+            use_pv: usePv.value || false,
         };
 
         await invoke("save_config", { config });
-        console.log("💾 Configuration saved successfully");
+        console.log("✅ Configuration saved successfully");
     } catch (e) {
-        console.error("❌ Failed to save config:", e);
-        showError(`配置保存失败: ${e.message || e}`);
+        console.error("❌ Failed to save configuration:", e);
+        showError(`保存配置失败: ${e.message || e}`);
     }
 }
 
@@ -837,6 +1019,112 @@ function clearSuccess() {
     successMessage.value = "";
 }
 
+// Startup diagnostics function
+async function runStartupDiagnostics() {
+    try {
+        console.log("🔧 Running startup diagnostics...");
+
+        // Test basic API connectivity
+        try {
+            const status = await invoke("get_vc_status");
+            console.log("✅ API connectivity test passed:", status);
+        } catch (e) {
+            console.warn("⚠️ API connectivity test failed:", e);
+        }
+
+        // Validate device information
+        if (hostapis.value.length === 0) {
+            console.warn("⚠️ No host APIs detected");
+        } else {
+            console.log("✅ Host APIs available:", hostapis.value.length);
+        }
+
+        if (inputDevices.value.length === 0) {
+            console.warn("⚠️ No input devices detected");
+        } else {
+            console.log(
+                "✅ Input devices available:",
+                inputDevices.value.length,
+            );
+        }
+
+        if (outputDevices.value.length === 0) {
+            console.warn("⚠️ No output devices detected");
+        } else {
+            console.log(
+                "✅ Output devices available:",
+                outputDevices.value.length,
+            );
+        }
+
+        // Check configuration integrity
+        if (!pth.value && !index.value) {
+            console.log(
+                "ℹ️ No model files configured - this is normal for first run",
+            );
+        } else {
+            console.log("✅ Model configuration present");
+        }
+
+        // Test audio stream composable
+        if (
+            typeof initializeAudioStream === "function" &&
+            typeof stopAudioStream === "function"
+        ) {
+            console.log("✅ Audio stream functions available");
+        } else {
+            console.error("❌ Audio stream functions missing");
+        }
+
+        console.log("🎯 Startup diagnostics completed");
+    } catch (error) {
+        console.error("❌ Startup diagnostics failed:", error);
+    }
+}
+
+async function copyError() {
+    try {
+        await navigator.clipboard.writeText(errorMessage.value);
+        showSuccess("错误信息已复制到剪贴板");
+    } catch (err) {
+        console.error("复制失败:", err);
+        // 降级方案：使用传统的复制方法
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = errorMessage.value;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+            showSuccess("错误信息已复制到剪贴板");
+        } catch (fallbackErr) {
+            console.error("降级复制也失败:", fallbackErr);
+            showError("复制失败，请手动复制错误信息");
+        }
+    }
+}
+
+async function copySuccess() {
+    try {
+        await navigator.clipboard.writeText(successMessage.value);
+        console.log("成功信息已复制到剪贴板");
+    } catch (err) {
+        console.error("复制失败:", err);
+        // 降级方案：使用传统的复制方法
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = successMessage.value;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+            console.log("成功信息已复制到剪贴板");
+        } catch (fallbackErr) {
+            console.error("降级复制也失败:", fallbackErr);
+        }
+    }
+}
+
 function showError(message) {
     errorMessage.value = message;
     console.error("❌", message);
@@ -846,6 +1134,23 @@ function showError(message) {
             clearError();
         }
     }, 10000);
+}
+
+// Simplified file path input - users can manually enter paths
+function validateModelPath() {
+    if (pth.value && !pth.value.toLowerCase().endsWith(".pth")) {
+        showError("模型文件必须是 .pth 格式");
+        return false;
+    }
+    return true;
+}
+
+function validateIndexPath() {
+    if (index.value && !index.value.toLowerCase().endsWith(".index")) {
+        showError("索引文件必须是 .index 格式");
+        return false;
+    }
+    return true;
 }
 
 function showSuccess(message) {
@@ -909,31 +1214,28 @@ watch(
 
 // Lifecycle
 onMounted(async () => {
-    await loadConfig();
-    await fetchDevices();
-    await applyDevices();
+    try {
+        console.log("🚀 Initializing RVC application...");
 
-    // Listen for audio data events
-    const unlistenAudio = await listen("audio_data", (event) => {
-        const { input_data, output_data, sample_rate } = event.payload;
-        inputAudioData.value = input_data;
-        outputAudioData.value = output_data;
-        sampleRate.value = sample_rate;
-    });
+        console.log("📋 Loading configuration...");
+        await loadConfig();
 
-    // Listen for performance events
-    const unlistenPerformance = await listen("performance_data", (event) => {
-        const {
-            inference_time,
-            algorithm_latency,
-            buffer_latency,
-            total_latency,
-        } = event.payload;
-        inferenceTime.value = inference_time;
-        algorithmLatency.value = algorithm_latency;
-        bufferLatency.value = buffer_latency;
-        totalLatency.value = total_latency;
-    });
+        console.log("🔍 Fetching audio devices...");
+        await fetchDevices();
+
+        console.log("🔧 Applying device settings...");
+        await applyDevices();
+
+        console.log("✅ Application initialized successfully");
+
+        // Run startup diagnostics
+        await runStartupDiagnostics();
+
+        // Audio data and metrics are now handled by useAudioStream
+    } catch (error) {
+        console.error("❌ Failed to initialize application:", error);
+        showError(`应用初始化失败: ${error.message || error}`);
+    }
 
     // Listen for RVC status events
     const unlistenStatus = await listen("rvc_status", (event) => {
@@ -941,48 +1243,114 @@ onMounted(async () => {
         console.log(`🔄 RVC Status: ${status} - ${message}`);
 
         if (status === "started") {
+            isRunning.value = true;
             showSuccess(message);
-            connectionStatus.value = "connected";
         } else if (status === "stopped") {
+            isRunning.value = false;
             showSuccess(message);
-            connectionStatus.value = "disconnected";
         }
+
+        connectionStatus.value = status;
     });
 
     // Listen for RVC error events
     const unlistenError = await listen("rvc_error", (event) => {
-        const { error, type, file, timestamp } = event.payload;
+        const { error, type, file, resolved_path, timestamp } = event.payload;
         console.error(`❌ RVC Error [${type}]:`, error);
 
         let userMessage = error;
         if (type === "file_not_found") {
-            userMessage = `文件未找到: ${file}`;
+            if (resolved_path) {
+                userMessage = `文件未找到: ${file}\n解析路径: ${resolved_path}`;
+            } else {
+                userMessage = `文件未找到: ${file}`;
+            }
         } else if (type === "already_running") {
             userMessage = "语音转换已在运行中";
         }
 
+        // Reset running state on errors
+        if (type === "file_not_found" || type === "device_error") {
+            isRunning.value = false;
+        }
+
         showError(userMessage);
-        connectionStatus.value = "error";
-        lastError.value = error;
     });
+
+    // Initial status check
+    await checkStatus();
 
     // Store unlisten functions for cleanup
     window.rvcUnlisteners = {
-        audio: unlistenAudio,
-        performance: unlistenPerformance,
         status: unlistenStatus,
         error: unlistenError,
     };
 });
 
+// Status checking functions
+async function checkStatus() {
+    try {
+        const status = await invoke("get_vc_status");
+
+        if (!status || typeof status !== "object") {
+            console.warn("⚠️ Invalid status response:", status);
+            return;
+        }
+
+        const wasRunning = isRunning.value;
+        isRunning.value = Boolean(status.is_running);
+
+        // Log status changes
+        if (wasRunning !== isRunning.value) {
+            console.log(
+                `🔄 Status changed: ${wasRunning ? "running" : "stopped"} -> ${isRunning.value ? "running" : "stopped"}`,
+            );
+
+            // Update connection status based on running state
+            if (isRunning.value && connectionStatus.value === "disconnected") {
+                connectionStatus.value = "connected";
+            } else if (
+                !isRunning.value &&
+                connectionStatus.value === "connected"
+            ) {
+                connectionStatus.value = "disconnected";
+            }
+        }
+    } catch (e) {
+        console.error("❌ Failed to check status:", e);
+        // Set disconnected status on error
+        if (connectionStatus.value === "connected") {
+            connectionStatus.value = "error";
+        }
+    }
+}
+
+function startStatusChecking() {
+    stopStatusChecking(); // Clear any existing interval
+    statusCheckInterval.value = setInterval(checkStatus, 1000); // Check every second
+    console.log("📊 Started status checking");
+}
+
+function stopStatusChecking() {
+    if (statusCheckInterval.value) {
+        clearInterval(statusCheckInterval.value);
+        statusCheckInterval.value = null;
+        console.log("📊 Stopped status checking");
+    }
+}
+
 // Cleanup on unmount
 onUnmounted(() => {
+    // Stop status checking
+    stopStatusChecking();
+
     if (window.rvcUnlisteners) {
         Object.values(window.rvcUnlisteners).forEach((unlisten) => {
             if (typeof unlisten === "function") {
                 unlisten();
             }
         });
+        delete window.rvcUnlisteners;
     }
 });
 </script>
@@ -1097,23 +1465,86 @@ onUnmounted(() => {
 
 .main-controls {
     display: flex;
-    gap: 0.75rem;
+    flex-direction: column;
+    gap: 1rem;
     margin-bottom: 1rem;
 }
 
-.control-btn {
-    flex: 1;
-    padding: 0.75rem 1.5rem;
-    border: none;
+.control-section {
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    font-size: 0.95rem;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-section h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+    font-size: 1rem;
     font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
+}
+
+.status-indicator {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+}
+
+.status-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #9ca3af;
+    transition: all 0.3s ease;
+}
+
+.status-light.active {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+    animation: pulse-light 2s infinite;
+}
+
+@keyframes pulse-light {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.status-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #555;
+}
+
+/* Control buttons */
+.control-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.control-btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    min-width: 90px;
+    justify-content: center;
 }
 
 .control-btn svg {
@@ -1122,28 +1553,45 @@ onUnmounted(() => {
 }
 
 .start-btn {
-    background: linear-gradient(135deg, #4caf50, #45a049);
+    background: linear-gradient(135deg, #10b981, #059669);
     color: white;
 }
 
 .start-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.4);
+}
+
+.start-btn.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
 }
 
 .stop-btn {
-    background: linear-gradient(135deg, #f44336, #da190b);
+    background: linear-gradient(135deg, #ef4444, #dc2626);
     color: white;
 }
 
 .stop-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
 }
 
 .control-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
 }
 
 .mode-selector {
@@ -1453,6 +1901,47 @@ onUnmounted(() => {
     border-radius: 4px;
     font-size: 0.8rem;
     color: #667eea;
+    word-break: break-all;
+}
+
+.file-hint {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #666;
+    font-style: italic;
+}
+
+.path-suggestions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.suggestion-btn {
+    padding: 0.25rem 0.5rem;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.suggestion-btn:hover {
+    background: #5a67d8;
+}
+
+.suggestion-btn.secondary {
+    background: #9ca3af;
+}
+
+.suggestion-btn.secondary:hover {
+    background: #6b7280;
 }
 
 .reload-btn {
@@ -1602,7 +2091,333 @@ onUnmounted(() => {
     }
 }
 
-/* Responsive Design */
+/* Responsive Design for 800x600 and smaller screens */
+@media (max-width: 800px), (max-height: 600px) {
+    .app-container {
+        font-size: 12px;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .app-header {
+        padding: 0.3rem 0;
+        min-height: 45px;
+        flex-shrink: 0;
+    }
+
+    .header-content {
+        padding: 0 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .app-title {
+        font-size: 0.85rem;
+        margin: 0;
+        white-space: nowrap;
+    }
+
+    .connection-status {
+        font-size: 0.65rem;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .status-label {
+        display: none;
+    }
+
+    .status-indicator {
+        padding: 0.15rem 0.3rem;
+        font-size: 0.65rem;
+        border-radius: 3px;
+    }
+
+    .settings-toggle {
+        padding: 0.3rem;
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+    }
+
+    .settings-toggle svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .main-content {
+        padding: 0.3rem;
+        gap: 0.3rem;
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .top-row {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+
+    .bottom-row {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+
+    .control-panel,
+    .quick-settings,
+    .visualizations,
+    .performance-panel {
+        padding: 0.5rem;
+        margin: 0;
+        border-radius: 6px;
+    }
+
+    .control-section {
+        margin-bottom: 0.5rem;
+    }
+
+    .control-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .control-section h3 {
+        font-size: 0.8rem;
+        margin-bottom: 0.3rem;
+        line-height: 1.2;
+    }
+
+    .status-indicator.connected,
+    .status-indicator.connecting,
+    .status-indicator.disconnected,
+    .status-indicator.error {
+        font-size: 0.65rem;
+    }
+
+    .status-light {
+        width: 6px;
+        height: 6px;
+    }
+
+    .main-controls {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        justify-content: center;
+    }
+
+    .control-buttons {
+        gap: 0.3rem;
+        justify-content: center;
+    }
+
+    .control-btn {
+        padding: 0.35rem 0.7rem;
+        font-size: 0.7rem;
+        min-width: 70px;
+        border-radius: 4px;
+    }
+
+    .control-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .mode-selector {
+        gap: 0.25rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .mode-option {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.65rem;
+        min-width: 45px;
+        border-radius: 3px;
+    }
+
+    .quick-setting {
+        margin-bottom: 0.4rem;
+    }
+
+    .quick-setting:last-child {
+        margin-bottom: 0;
+    }
+
+    .quick-setting label {
+        font-size: 0.7rem;
+        margin-bottom: 0.15rem;
+        display: block;
+    }
+
+    .slider-container {
+        gap: 0.3rem;
+        align-items: center;
+    }
+
+    .slider {
+        height: 3px;
+        min-width: 40px;
+        flex: 1;
+    }
+
+    .slider::-webkit-slider-thumb {
+        width: 12px;
+        height: 12px;
+    }
+
+    .slider::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+    }
+
+    .value {
+        font-size: 0.65rem;
+        min-width: 30px;
+        text-align: center;
+    }
+
+    .visualizer-grid {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+
+    .settings-panel {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        padding: 0.5rem;
+        overflow-y: auto;
+    }
+
+    .settings-header {
+        padding: 0.5rem;
+        margin: -0.5rem -0.5rem 0.5rem -0.5rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .settings-header h2 {
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    .close-btn {
+        width: 24px;
+        height: 24px;
+        padding: 0.2rem;
+    }
+
+    .close-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .settings-tabs {
+        gap: 0.2rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+    }
+
+    .tab-btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.7rem;
+        flex: 1;
+        min-width: 55px;
+        border-radius: 3px;
+    }
+
+    .settings-content {
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+    }
+
+    .settings-section {
+        margin-bottom: 0.75rem;
+    }
+
+    .settings-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .settings-section h3 {
+        font-size: 0.75rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .form-group {
+        margin-bottom: 0.5rem;
+    }
+
+    .form-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .form-group label {
+        font-size: 0.7rem;
+        margin-bottom: 0.15rem;
+        display: block;
+    }
+
+    .file-input,
+    .select-input {
+        padding: 0.3rem;
+        font-size: 0.7rem;
+        border-radius: 3px;
+    }
+
+    .file-name {
+        font-size: 0.65rem;
+        padding: 0.25rem;
+        line-height: 1.2;
+    }
+
+    .file-hint {
+        font-size: 0.6rem;
+        line-height: 1.2;
+    }
+
+    .radio-group,
+    .checkbox-group {
+        gap: 0.3rem;
+        flex-wrap: wrap;
+    }
+
+    .radio-label,
+    .checkbox-label {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+    }
+
+    .suggestion-btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.65rem;
+        border-radius: 3px;
+    }
+
+    .reload-btn {
+        padding: 0.25rem;
+        width: 24px;
+        height: 24px;
+        border-radius: 3px;
+    }
+
+    .reload-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .info-text {
+        font-size: 0.65rem;
+        line-height: 1.3;
+        padding: 0.3rem;
+    }
+}
+
 @media (max-width: 1200px) {
     .main-content {
         padding: 1rem;
@@ -1618,7 +2433,7 @@ onUnmounted(() => {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px) and (min-width: 481px) {
     .app-container {
         font-size: 14px;
     }
@@ -1646,8 +2461,9 @@ onUnmounted(() => {
     }
 
     .settings-panel {
-        width: 100vw;
-        right: -100vw;
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
     }
 
     .settings-tabs {
@@ -1655,9 +2471,8 @@ onUnmounted(() => {
     }
 
     .tab-btn {
-        min-width: 70px;
         white-space: nowrap;
-        padding: 0.6rem;
+        min-width: 120px;
     }
 }
 
@@ -1723,6 +2538,39 @@ onUnmounted(() => {
         color: #e2e8f0;
     }
 
+    .control-section h3 {
+        color: #e2e8f0;
+    }
+
+    .status-indicator {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .status-text {
+        color: #e2e8f0;
+    }
+
+    .file-hint {
+        background: rgba(255, 255, 255, 0.05);
+        color: #a0a0a0;
+    }
+
+    .suggestion-btn {
+        background: #4c51bf;
+    }
+
+    .suggestion-btn:hover {
+        background: #553c9a;
+    }
+
+    .suggestion-btn.secondary {
+        background: #4a5568;
+    }
+
+    .suggestion-btn.secondary:hover {
+        background: #2d3748;
+    }
+
     .info-text {
         background: rgba(113, 128, 150, 0.2);
         color: #a0aec0;
@@ -1732,13 +2580,14 @@ onUnmounted(() => {
 /* Notification Area */
 .notification-area {
     position: fixed;
-    top: 70px;
-    right: 20px;
-    z-index: 1001;
+    top: 60px;
+    right: 10px;
+    z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    max-width: 400px;
+    gap: 8px;
+    max-width: 300px;
+    pointer-events: none;
 }
 
 .notification {
@@ -1755,8 +2604,8 @@ onUnmounted(() => {
 }
 
 .notification:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .notification.error {
@@ -1772,16 +2621,42 @@ onUnmounted(() => {
 }
 
 .notification-icon {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
 }
 
 .notification-text {
     flex: 1;
+    font-size: 0.8rem;
+    line-height: 1.3;
     font-weight: 500;
-    font-size: 0.9rem;
-    line-height: 1.4;
+    word-break: break-word;
+}
+
+.notification-copy {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s ease;
+    margin-right: 0.25rem;
+}
+
+.notification-copy:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.notification-copy svg {
+    width: 14px;
+    height: 14px;
 }
 
 .notification-close {
@@ -1797,7 +2672,7 @@ onUnmounted(() => {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s ease;
 }
 
 .notification-close:hover {
@@ -1815,16 +2690,54 @@ onUnmounted(() => {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 800px), (max-height: 600px) {
     .notification-area {
-        top: 60px;
+        top: 45px;
+        right: 6px;
+        left: 6px;
+        max-width: none;
+        gap: 4px;
+    }
+
+    .notification {
+        padding: 0.4rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.65rem;
+        gap: 0.4rem;
+    }
+
+    .notification-text {
+        font-size: 0.65rem;
+        line-height: 1.2;
+    }
+
+    .notification-icon {
+        width: 12px;
+        height: 12px;
+    }
+
+    .notification-copy,
+    .notification-close {
+        width: 18px;
+        height: 18px;
+        padding: 0.15rem;
+    }
+
+    .notification-copy svg {
+        width: 10px;
+        height: 10px;
+    }
+}
+
+@media (max-width: 768px) and (min-width: 481px) {
+    .notification-area {
         right: 10px;
         left: 10px;
         max-width: none;
     }
 
     .notification {
-        padding: 0.6rem 0.8rem;
+        padding: 10px 12px;
     }
 
     .notification-text {

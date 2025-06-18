@@ -320,20 +320,20 @@ impl ModelLoader {
         let mut params = Vec::new();
 
         // 生成器参数
-        params.push("input_conv.weight".to_string());
-        params.push("input_conv.bias".to_string());
-        params.push("output_conv.weight".to_string());
-        params.push("output_conv.bias".to_string());
+        params.push("input_conv_weight".to_string());
+        params.push("input_conv_bias".to_string());
+        params.push("output_conv_weight".to_string());
+        params.push("output_conv_bias".to_string());
 
         // 上采样块参数
         for i in 0..config.generator.upsample_rates.len() {
-            params.push(format!("upsample_blocks_{}.conv_transpose.weight", i));
-            params.push(format!("upsample_blocks_{}.conv_transpose.bias", i));
+            params.push(format!("upsample_blocks_{}_conv_transpose_weight", i));
+            params.push(format!("upsample_blocks_{}_conv_transpose_bias", i));
         }
 
         // HuBERT 参数
-        params.push("feature_projection.weight".to_string());
-        params.push("feature_projection.bias".to_string());
+        params.push("feature_projection_weight".to_string());
+        params.push("feature_projection_bias".to_string());
 
         params
     }

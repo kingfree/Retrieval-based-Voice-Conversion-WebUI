@@ -42,37 +42,103 @@ export function useAudioStream() {
 
   const initializeAudioStream = async () => {
     try {
+      console.log("🎧 Initializing audio stream listeners...");
       lastError.value = null;
       connectionStatus.value = "connecting";
 
-      // Listen for input audio data
-      unlistenInputAudio = await listen("input_audio_data", (event) => {
+      // Listen for audio data (both input and output)
+      unlistenInputAudio = await listen("audio_data", (event) => {
         try {
-          const audioData = event.payload;
-          if (audioData && Array.isArray(audioData.samples)) {
-            updateInputBuffer(audioData.samples);
-            calculateInputVolume(audioData.samples);
-          } else {
-            console.warn("Invalid input audio data received:", audioData);
+          const { input_data, output_data, sample_rate } = event.payload;
+          console.log("🎵 Received audio_data event:", {
+            input_length: input_data?.length || 0,
+            output_length: output_data?.length || 0,
+            sample_rate,
+          });
+
+          if (input_data && Array.isArray(input_data)) {
+            updateInputBuffer(input_data);
+            calculateInputVolume(input_data);
+            inputAudioData.value = input_data;
+            console.log(
+              "📊 Input audio data updated, length:",
+              input_data.length,
+            );
+          }
+
+          if (output_data && Array.isArray(output_data)) {
+            updateOutputBuffer(output_data);
+            calculateOutputVolume(output_data);
+            outputAudioData.value = output_data;
+            console.log(
+              "📊 Output audio data updated, length:",
+              output_data.length,
+            );
+          }
+
+          if (sample_rate) {
+            // Update sample rate if provided
+            console.log("🔊 Sample rate updated:", sample_rate);
           }
         } catch (error) {
-          console.error("Error processing input audio data:", error);
+          console.error("❌ Error processing audio data:", error);
           lastError.value = error.message;
         }
       });
 
-      // Listen for output audio data
-      unlistenOutputAudio = await listen("output_audio_data", (event) => {
+      // Listen for audio metrics/performance data
+      unlistenOutputAudio = await listen("audio_metrics", (event) => {
         try {
-          const audioData = event.payload;
-          if (audioData && Array.isArray(audioData.samples)) {
-            updateOutputBuffer(audioData.samples);
-            calculateOutputVolume(audioData.samples);
-          } else {
-            console.warn("Invalid output audio data received:", audioData);
+          const {
+            inference_time,
+            total_processing_time,
+            input_level,
+            output_level,
+            timestamp,
+          } = event.payload;
+
+          console.log("📈 Received audio_metrics event:", {
+            inference_time,
+            total_processing_time,
+            input_level,
+            output_level,
+            timestamp,
+          });
+
+          // Update performance metrics
+          if (inference_time !== undefined) {
+            inferenceTime.value = inference_time;
+            console.log("⏱️ Inference time updated:", inference_time, "ms");
+          }
+          if (total_processing_time !== undefined) {
+            algorithmLatency.value = total_processing_time;
+            totalLatency.value = total_processing_time;
+            console.log(
+              "⏱️ Total processing time updated:",
+              total_processing_time,
+              "ms",
+            );
+          }
+
+          // Update audio levels if available
+          if (input_level !== undefined) {
+            const inputVolumeDb = Math.max(
+              -60,
+              20 * Math.log10(Math.max(input_level, 1e-6)),
+            );
+            inputVolume.value = inputVolumeDb;
+            console.log("🔊 Input volume updated:", inputVolumeDb, "dB");
+          }
+          if (output_level !== undefined) {
+            const outputVolumeDb = Math.max(
+              -60,
+              20 * Math.log10(Math.max(output_level, 1e-6)),
+            );
+            outputVolume.value = outputVolumeDb;
+            console.log("🔊 Output volume updated:", outputVolumeDb, "dB");
           }
         } catch (error) {
-          console.error("Error processing output audio data:", error);
+          console.error("❌ Error processing audio metrics:", error);
           lastError.value = error.message;
         }
       });
@@ -218,6 +284,21 @@ export function useAudioStream() {
     outputVolume.value = rms > 0 ? Math.max(-60, 20 * Math.log10(rms)) : -60;
   };
 
+  const stopAudioStream = async () => {
+    try {
+      console.log("🛑 Stopping audio stream...");
+      isStreaming.value = false;
+      connectionStatus.value = "disconnected";
+      await cleanup();
+      console.log("✅ Audio stream stopped successfully");
+    } catch (error) {
+      console.error("❌ Error stopping audio stream:", error);
+      lastError.value = error.message;
+      connectionStatus.value = "error";
+      throw error;
+    }
+  };
+
   const clearBuffers = () => {
     inputBuffer = [];
     outputBuffer = [];
@@ -347,11 +428,10 @@ export function useAudioStream() {
 
     // Methods
     initializeAudioStream,
+    stopAudioStream,
     clearBuffers,
-    getInputPeakLevel,
-    getOutputPeakLevel,
-    getInputFrequencyData,
-    getOutputFrequencyData,
+
+    // Cleanup
     cleanup,
   };
 }

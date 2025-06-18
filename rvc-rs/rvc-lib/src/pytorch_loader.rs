@@ -168,7 +168,7 @@ impl PyTorchModelLoader {
 
         // 模拟权重参数
         checkpoint.insert(
-            "weight.emb_g.weight".to_string(),
+            "weight_emb_g_weight".to_string(),
             Tensor::randn(&[1, 256], (Kind::Float, self.device)),
         );
 
@@ -181,12 +181,12 @@ impl PyTorchModelLoader {
 
         // 模拟一些生成器权重
         checkpoint.insert(
-            "weight.enc_p.conv_1.weight".to_string(),
+            "weight_enc_p_conv_1_weight".to_string(),
             Tensor::randn(&[192, 768, 3], (Kind::Float, self.device)),
         );
 
         checkpoint.insert(
-            "weight.dec.conv_post.weight".to_string(),
+            "weight_dec_conv_post_weight".to_string(),
             Tensor::randn(&[1, 192, 7], (Kind::Float, self.device)),
         );
 
@@ -231,7 +231,7 @@ impl PyTorchModelLoader {
         }
 
         // 解析说话人嵌入
-        if let Some(emb_tensor) = checkpoint.get("weight.emb_g.weight") {
+        if let Some(emb_tensor) = checkpoint.get("weight_emb_g_weight") {
             let shape = emb_tensor.size();
             if !shape.is_empty() {
                 config.n_speakers = shape[0];
@@ -310,7 +310,7 @@ impl PyTorchModelLoader {
 
         // 创建一些基本的层权重作为占位符
         let _emb_g = root.var(
-            "emb_g.weight",
+            "emb_g_weight",
             &[config.n_speakers, 256],
             nn::Init::Randn {
                 mean: 0.,
@@ -319,7 +319,7 @@ impl PyTorchModelLoader {
         );
 
         let _conv_pre = root.var(
-            "enc_p.conv_pre.weight",
+            "enc_p_conv_pre_weight",
             &[config.arch_params["inter_channels"], config.feature_dim, 1],
             nn::Init::Randn {
                 mean: 0.,
@@ -328,7 +328,7 @@ impl PyTorchModelLoader {
         );
 
         let _conv_post = root.var(
-            "dec.conv_post.weight",
+            "dec_conv_post_weight",
             &[1, config.arch_params["hidden_channels"], 7],
             nn::Init::Randn {
                 mean: 0.,
@@ -338,6 +338,11 @@ impl PyTorchModelLoader {
 
         println!("Created placeholder weights for testing");
         Ok(())
+    }
+
+    /// 清理变量名（将点号替换为下划线）
+    fn sanitize_variable_name(name: &str) -> String {
+        name.replace(".", "_")
     }
 
     /// 将权重映射到 VarStore
@@ -350,9 +355,17 @@ impl PyTorchModelLoader {
         let root = &vs.root();
 
         for (name, tensor) in weights {
+            // 清理变量名，将点号替换为下划线
+            let sanitized_name = Self::sanitize_variable_name(name);
+
             // 创建对应的变量
-            let var = root.var_copy(name, tensor);
-            println!("Mapped weight: {} -> shape {:?}", name, var.size());
+            let var = root.var_copy(&sanitized_name, tensor);
+            println!(
+                "Mapped weight: {} -> {} -> shape {:?}",
+                name,
+                sanitized_name,
+                var.size()
+            );
         }
 
         Ok(())
