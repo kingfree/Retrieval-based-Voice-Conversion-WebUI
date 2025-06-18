@@ -100,44 +100,6 @@ impl Default for AudioCallbackConfig {
 }
 
 /// Simplified RVC for use in callbacks
-pub struct SimpleRVC {
-    pub f0_up_key: f32,
-    pub formant_shift: f32,
-    pub device: Device,
-    pub is_half: bool,
-    pub tgt_sr: i32,
-    pub if_f0: i32,
-    pub version: String,
-    pub model_loaded: bool,
-    pub hubert_loaded: bool,
-}
-
-impl SimpleRVC {
-    /// Simple inference method for callback use
-    pub fn infer_simple(&mut self, input: &[f32]) -> Result<Vec<f32>, String> {
-        // Simple pitch shifting for callback processing
-        let ratio = (2.0f32).powf(self.f0_up_key / 12.0);
-        if ratio == 1.0 {
-            return Ok(input.to_vec());
-        }
-
-        let out_len = ((input.len() as f32) / ratio).round() as usize;
-        let mut output = Vec::with_capacity(out_len);
-        for i in 0..out_len {
-            let pos = i as f32 * ratio;
-            let idx = pos.floor() as usize;
-            let frac = pos - idx as f32;
-            if idx + 1 < input.len() {
-                let a = input[idx];
-                let b = input[idx + 1];
-                output.push(a * (1.0 - frac) + b * frac);
-            } else if idx < input.len() {
-                output.push(input[idx]);
-            }
-        }
-        Ok(output)
-    }
-}
 
 /// Apply crossfade between current and previous audio buffers
 pub fn apply_crossfade(current: &[f32], previous: &mut [f32], fade_samples: usize) -> Vec<f32> {
@@ -1293,77 +1255,19 @@ impl RVC {
             return Err("Streaming not active".to_string());
         }
 
-        // For now, use the simple inference method
-        // In a full implementation, this would use the full infer pipeline
-        // with proper buffering and overlap handling
-        self.infer_simple(input_data)
-    }
+        // Use full inference pipeline for proper voice conversion
+        let block_frame_16k = input_data.len() * 16000 / 44100; // Assume 44.1kHz input, convert to 16kHz frame size
+        let skip_head = 0;
+        let return_length = block_frame_16k;
+        let f0method = "harvest"; // Default method, should be configurable
 
-    /// Create an audio callback for real-time processing
-    ///
-    /// This creates a callback function that can be used with external audio systems
-    /// for real-time voice conversion processing.
-    pub fn create_audio_callback(
-        &mut self,
-        config: AudioCallbackConfig,
-    ) -> Result<AudioCallback, String> {
-        if !self.is_ready() {
-            return Err("RVC not ready - models not loaded".to_string());
-        }
-
-        // Clone necessary data for the callback
-        let mut rvc_clone = self.clone_for_callback()?;
-        let mut input_buffer = Vec::with_capacity(config.block_size * 2);
-        let mut output_buffer = Vec::with_capacity(config.block_size * 2);
-        let mut crossfade_buffer = if config.enable_crossfade {
-            Some(vec![0.0; config.crossfade_samples])
-        } else {
-            None
-        };
-
-        let callback = Box::new(move |input: &[f32], output: &mut [f32]| {
-            // Add input to buffer
-            input_buffer.extend_from_slice(input);
-
-            // Process when we have enough samples
-            if input_buffer.len() >= config.block_size {
-                // Take a block for processing
-                let process_block: Vec<f32> = input_buffer.drain(..config.block_size).collect();
-
-                // Process the audio chunk
-                let processed = match rvc_clone.infer_simple(&process_block) {
-                    Ok(audio) => audio,
-                    Err(_) => {
-                        // On error, return the original audio
-                        process_block
-                    }
-                };
-
-                // Apply crossfade if enabled
-                let final_output = if let Some(ref mut fade_buf) = crossfade_buffer {
-                    apply_crossfade(&processed, fade_buf, config.crossfade_samples)
-                } else {
-                    processed
-                };
-
-                // Add to output buffer
-                output_buffer.extend_from_slice(&final_output);
-            }
-
-            // Copy available output to the output slice
-            let copy_len = output.len().min(output_buffer.len());
-            if copy_len > 0 {
-                output[..copy_len].copy_from_slice(&output_buffer[..copy_len]);
-                output_buffer.drain(..copy_len);
-            }
-
-            // Fill remaining output with silence if needed
-            if copy_len < output.len() {
-                output[copy_len..].fill(0.0);
-            }
-        });
-
-        Ok(callback)
+        self.infer(
+            input_data,
+            block_frame_16k,
+            skip_head,
+            return_length,
+            f0method,
+        )
     }
 
     /// Set an audio callback for real-time processing
@@ -1400,24 +1304,6 @@ impl RVC {
         }
     }
 
-    /// Clone the RVC instance for use in callbacks
-    ///
-    /// This creates a simplified clone that can be used in audio callbacks.
-    /// It preserves the essential configuration and state but not the heavy resources.
-    fn clone_for_callback(&self) -> Result<SimpleRVC, String> {
-        Ok(SimpleRVC {
-            f0_up_key: self.f0_up_key,
-            formant_shift: self.formant_shift,
-            device: self.device,
-            is_half: self.is_half,
-            tgt_sr: self.tgt_sr,
-            if_f0: self.if_f0,
-            version: self.version.clone(),
-            model_loaded: self.model_loaded,
-            hubert_loaded: self.hubert_loaded,
-        })
-    }
-
     /// Enhanced stream processing with callback support
     ///
     /// This method provides enhanced streaming with callback integration
@@ -1451,32 +1337,6 @@ impl RVC {
             config.sample_rate, config.block_size
         );
         Ok(())
-    }
-
-    /// Legacy simple inference method for backward compatibility
-    pub fn infer_simple(&mut self, input: &[f32]) -> Result<Vec<f32>, String> {
-        // Simple pitch shifting for backward compatibility
-        let ratio = (2.0f32).powf(self.f0_up_key / 12.0);
-        if ratio == 1.0 {
-            return Ok(input.to_vec());
-        }
-
-        let out_len = ((input.len() as f32) / ratio).round() as usize;
-        let mut output = Vec::with_capacity(out_len);
-        for i in 0..out_len {
-            let pos = i as f32 * ratio;
-            let idx = pos.floor() as usize;
-            let frac = pos - idx as f32;
-            if idx + 1 < input.len() {
-                let a = input[idx];
-                let b = input[idx + 1];
-                output.push(a * (1.0 - frac) + b * frac);
-            } else if idx < input.len() {
-                output.push(input[idx]);
-            }
-        }
-
-        Ok(output)
     }
 
     /// Extract F0 from an audio buffer using the specified method and
@@ -2234,28 +2094,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_infer_identity() {
-        let mut cfg = GUIConfig::default();
-        cfg.pitch = 0.0;
-        let mut rvc = RVC::new(&cfg);
-        let input: Vec<f32> = (0..320).map(|_| 0.5).collect();
-        let output = rvc.infer_simple(&input);
-        assert_eq!(input, output.unwrap());
-    }
-
-    #[test]
-    fn test_infer_pitch_shift_up() {
-        let mut cfg = GUIConfig::default();
-        cfg.pitch = 12.0; // one octave up
-        let mut rvc = RVC::new(&cfg);
-        let input = vec![0.0, 0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5];
-        let output = rvc.infer_simple(&input);
-
-        // Manually computed linear resample at ratio=2
-        let expected = vec![0.0, 1.0, 0.0, -1.0];
-        assert_eq!(output.unwrap(), expected);
-    }
+    // Tests removed - infer_simple method deleted as not in Python implementation
 
     #[test]
     fn test_streaming_initialization() {
@@ -2326,79 +2165,9 @@ mod tests {
         assert!(result.unwrap_err().contains("Streaming not active"));
     }
 
-    #[test]
-    fn test_audio_callback_creation() {
-        let mut cfg = GUIConfig::default();
-        cfg.pth_path = "mock_model.pth".to_string();
-        let mut rvc = RVC::new(&cfg);
+    // Tests removed - create_audio_callback method deleted as not in Python implementation
 
-        // Force model loaded state for testing
-        rvc.model_loaded = true;
-        rvc.hubert_loaded = true;
-
-        let config = AudioCallbackConfig::default();
-        let result = rvc.create_audio_callback(config);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_audio_callback_without_ready() {
-        let cfg = GUIConfig::default();
-        let mut rvc = RVC::new(&cfg);
-
-        let config = AudioCallbackConfig::default();
-        let result = rvc.create_audio_callback(config);
-        assert!(result.is_err());
-        if let Err(e) = result {
-            assert!(e.contains("not ready"));
-        }
-    }
-
-    #[test]
-    fn test_set_and_clear_audio_callback() {
-        let mut cfg = GUIConfig::default();
-        cfg.pth_path = "mock_model.pth".to_string();
-        let mut rvc = RVC::new(&cfg);
-
-        // Force model loaded state for testing
-        rvc.model_loaded = true;
-        rvc.hubert_loaded = true;
-
-        // Create and set callback
-        let config = AudioCallbackConfig::default();
-        let callback = rvc.create_audio_callback(config).unwrap();
-        let result = rvc.set_audio_callback(callback);
-        assert!(result.is_ok());
-
-        // Clear callback
-        rvc.clear_audio_callback();
-        assert!(rvc.audio_callback.is_none());
-    }
-
-    #[test]
-    fn test_audio_callback_processing() {
-        let mut cfg = GUIConfig::default();
-        cfg.pth_path = "mock_model.pth".to_string();
-        let mut rvc = RVC::new(&cfg);
-
-        // Force model loaded state for testing
-        rvc.model_loaded = true;
-        rvc.hubert_loaded = true;
-
-        // Create and set callback
-        let config = AudioCallbackConfig::default();
-        let callback = rvc.create_audio_callback(config).unwrap();
-        rvc.set_audio_callback(callback).unwrap();
-
-        // Test processing
-        let input = vec![0.5; 512];
-        let mut output = vec![0.0; 512];
-        let result = rvc.process_audio_callback(&input, &mut output);
-        assert!(result.is_ok());
-
-        // Output should contain some non-zero values after processing
-        assert!(output.iter().any(|&x| x != 0.0));
-    }
+    // Tests removed - audio callback methods deleted as not in Python implementation
 
     #[test]
     fn test_enhanced_streaming() {
@@ -2443,26 +2212,5 @@ mod tests {
         assert_eq!(previous[0], 1.0);
     }
 
-    #[test]
-    fn test_simple_rvc_clone() {
-        let mut cfg = GUIConfig::default();
-        cfg.pth_path = "mock_model.pth".to_string();
-        let mut rvc = RVC::new(&cfg);
-
-        // Force model loaded state for testing
-        rvc.model_loaded = true;
-        rvc.hubert_loaded = true;
-
-        let simple_rvc = rvc.clone_for_callback();
-        assert!(simple_rvc.is_ok());
-
-        let mut simple = simple_rvc.unwrap();
-        assert_eq!(simple.f0_up_key, rvc.f0_up_key);
-        assert_eq!(simple.model_loaded, rvc.model_loaded);
-
-        // Test inference on simple RVC
-        let input = vec![0.5; 256];
-        let result = simple.infer_simple(&input);
-        assert!(result.is_ok());
-    }
+    // Test removed - SimpleRVC and clone_for_callback deleted as not in Python implementation
 }

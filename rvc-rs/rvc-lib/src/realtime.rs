@@ -58,6 +58,9 @@ pub fn start_vc_with_callback(audio_callback: Option<AudioDataCallback>) -> Resu
     let cfg = GUI::load().map_err(|e| e.to_string())?;
     let rvc = Arc::new(Mutex::new(RVC::new(&cfg)));
 
+    // Clone config for use in audio callback
+    let cfg_clone = cfg.clone();
+
     // prepare crossfade windows for smoother output
     let crossfade_frames = (cfg.crossfade_length * selected.sample_rate as f32).round() as usize;
     let crossfade_frames = crossfade_frames.max(1);
@@ -115,6 +118,8 @@ pub fn start_vc_with_callback(audio_callback: Option<AudioDataCallback>) -> Resu
     let fade_out_c = fade_out_window.clone();
     let prev_in = prev_chunk.clone();
     let callback_clone = audio_callback.clone();
+    let cfg_in = cfg_clone.clone();
+    let selected_in = selected.clone();
     let err_fn = |e| eprintln!("stream error: {e}");
     let input_stream = input
         .build_input_stream(
@@ -130,10 +135,22 @@ pub fn start_vc_with_callback(audio_callback: Option<AudioDataCallback>) -> Resu
                 let mut rvc = rvc_in.lock().unwrap();
 
                 // Parameters for RVC::infer (matching Python implementation)
-                let block_frame_16k = data.len() * 16000 / selected.sample_rate as usize; // Convert to 16kHz frame size
-                let skip_head = 0; // Skip frames at the beginning
-                let return_length = block_frame_16k; // Return length in frames
-                let f0method = "harvest"; // Default F0 method, could be made configurable
+                // Calculate parameters based on GUI configuration like Python version
+                let zc = selected_in.sample_rate / 100; // 1% of sample rate
+                let block_frame =
+                    (cfg_in.block_time * selected_in.sample_rate as f32).round() as usize;
+                let block_frame_16k = 160 * block_frame / zc as usize; // Convert to 16kHz frame size
+                let extra_frame =
+                    (cfg_in.extra_time * selected_in.sample_rate as f32).round() as usize;
+                let crossfade_frame =
+                    (cfg_in.crossfade_length * selected_in.sample_rate as f32).round() as usize;
+                let sola_buffer_frame = crossfade_frame.min(4 * zc as usize);
+                let sola_search_frame = zc as usize;
+
+                let skip_head = extra_frame / zc as usize; // Skip frames at the beginning
+                let return_length =
+                    (block_frame + sola_buffer_frame + sola_search_frame) / zc as usize; // Return length in frames
+                let f0method = &cfg_in.f0method; // Read F0 method from configuration
 
                 let mut processed =
                     match rvc.infer(data, block_frame_16k, skip_head, return_length, f0method) {
