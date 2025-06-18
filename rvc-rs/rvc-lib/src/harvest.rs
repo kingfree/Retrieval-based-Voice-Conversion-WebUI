@@ -13,10 +13,21 @@ pub struct Harvest {
 impl Harvest {
     /// Create a new `Harvest` extractor for the given sample rate.
     pub fn new(fs: i32) -> Self {
-        let mut option = HarvestOption::new();
-        option.f0_floor = 50.0;
-        option.f0_ceil = 1100.0;
-        option.frame_period = 10.0;
+        let option = HarvestOption {
+            f0_floor: 50.0,
+            f0_ceil: 1100.0,
+            frame_period: 10.0,
+        };
+        Self { option, fs }
+    }
+
+    /// Create a new `Harvest` extractor with custom parameters.
+    pub fn with_params(fs: i32, f0_floor: f64, f0_ceil: f64, frame_period: f64) -> Self {
+        let option = HarvestOption {
+            f0_floor,
+            f0_ceil,
+            frame_period,
+        };
         Self { option, fs }
     }
 
@@ -51,8 +62,17 @@ impl Harvest {
 fn compute_inner(fs: i32, option: HarvestOption, x: &[f64]) -> Vec<f64> {
     let x_length = x.len() as i32;
     let f0_len = unsafe { GetSamplesForHarvest(fs, x_length, option.frame_period) } as usize;
+
+    // Validate inputs
+    if x_length <= 0 || f0_len == 0 {
+        return vec![0.0; 1];
+    }
+
     let mut temporal_positions = vec![0.0f64; f0_len];
     let mut f0 = vec![0.0f64; f0_len];
+
+
+
     unsafe {
         WorldHarvest(
             x.as_ptr(),
@@ -63,6 +83,15 @@ fn compute_inner(fs: i32, option: HarvestOption, x: &[f64]) -> Vec<f64> {
             f0.as_mut_ptr(),
         );
     }
+
+    // Post-process to filter out invalid values
+    for i in 0..f0.len() {
+        if f0[i] < option.f0_floor || f0[i] > option.f0_ceil || !f0[i].is_finite() {
+            f0[i] = 0.0;
+        }
+    }
+
+
     f0
 }
 
